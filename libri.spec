@@ -9,10 +9,8 @@ a = Analysis(
         # Includi la cartella 'app' e 'motore' (necessarie per gli import)
         ('app', 'app'),
         ('motore', 'motore'),
-        # Includi la cartella 'libri' (i tuoi dati)
-        ('libri', 'libri'),
         # Includi i file di CustomTkinter (obbligatorio)
-        ('venv/Lib/site-packages/customtkinter', 'customtkinter'),
+        ('.venv/Lib/site-packages/customtkinter', 'customtkinter'),
         # Se hai un'icona, decommenta e modifica la riga sotto
         # ('icona.ico', '.'),
     ],

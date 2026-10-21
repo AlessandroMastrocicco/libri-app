@@ -14,8 +14,8 @@ from urllib.request import urlopen, Request
 
 from app.version import __version__
 
-# URL futuro per GitHub (sostituisci con il tuo utente e repo)
-URL_GITHUB_RAW = "https://raw.githubusercontent.com/tuo-utente/tuo-repo/main/latest_version.json"
+# URL futuro per il controllo aggiornamenti GitHub.
+URL_GITHUB_RAW = "https://raw.githubusercontent.com/AlessandroMastrocicco/libri-app/main/latest_version.json"
 
 
 def _parse_version(v: str) -> tuple[int, ...]:
