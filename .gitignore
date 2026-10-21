@@ -1,0 +1,30 @@
+# Local libraries and user content
+/libri/
+/_slide_estratti/
+/risposte.json
+/consegna.txt
+/.tutorial_completato
+
+# Generated builds and Python artifacts
+/build/
+/dist/
+__pycache__/
+*.py[cod]
+*.spec~
+*.log
+*.tmp
+_cache_render/
+
+# Local environments and editor settings
+.venv/
+venv/
+env/
+.vscode/
+.idea/
+
+# Local secrets and environment configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
