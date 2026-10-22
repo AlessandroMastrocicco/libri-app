@@ -1,12 +1,15 @@
 # -*- coding: utf-8 -*-
-"""
-tutorial.py - Finestra modale che spiega il flusso di lavoro al primo avvio.
-"""
+"""Tour guidato delle schermate dell'applicazione."""
 
 from __future__ import annotations
 
+import tempfile
+from pathlib import Path
+
 import customtkinter as ctk
 
+from app.core.capitolo import crea_capitolo
+from app.core.libro import crea_libro
 from app.ui import tema
 from app.ui.widgets import bottone_primario, bottone_secondario, card
 
@@ -14,183 +17,305 @@ from app.ui.widgets import bottone_primario, bottone_secondario, card
 class TutorialWizard(ctk.CTkToplevel):
     def __init__(self, parent, on_finish=None):
         super().__init__(parent)
-        
+
+        self.app = parent
         self.on_finish = on_finish
         self.step = 0
-        
-        self.title("Benvenuto in LIBRI - Tutorial")
-        self.geometry("700x500")
-        self.resizable(False, False)
-        self.configure(fg_color=tema.BG_APP)
-        
+        self._chiuso = False
+        self._root_originale = self.app.root_progetto
+        self._directory_demo = tempfile.TemporaryDirectory(
+            prefix="LIBRI_tour_guidato_"
+        )
+        self._root_demo = Path(self._directory_demo.name)
+        self._slug_demo = "LibroTourGuidato"
+
         try:
+            self._prepara_dati_demo()
+            self.app.root_progetto = self._root_demo
+            self.title("Tour guidato di LIBRI")
+            self.geometry("570x310")
+            self.resizable(False, False)
+            self.configure(fg_color=tema.BG_APP)
             self.transient(parent)
+            self.grid_columnconfigure(0, weight=1)
+            self.grid_rowconfigure(0, weight=1)
+            self._build_ui()
+            self._mostra_step()
+            self._posiziona_su_parent(parent)
+            self.protocol("WM_DELETE_WINDOW", self._chiudi)
+            self.after(80, self.lift)
+            self.after(80, self.focus_force)
         except Exception:
-            pass
+            self.app.root_progetto = self._root_originale
+            self._directory_demo.cleanup()
+            self.destroy()
+            raise
 
-        self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(0, weight=1)
+    def _prepara_dati_demo(self):
+        risultato_libro = crea_libro(
+            self._root_demo,
+            {
+                "slug": self._slug_demo,
+                "titolo": "Libro dimostrativo",
+                "soggetto": "Tour guidato",
+                "dominio": "Dimostrazione",
+                "autore": "",
+            },
+        )
+        if not risultato_libro["ok"]:
+            raise RuntimeError(
+                "Impossibile preparare il libro dimostrativo: "
+                + " | ".join(risultato_libro["errori"])
+            )
 
-        # Dati dei passaggi
-        self.steps = [
-            {
-                "titolo": "Benvenuto in LIBRI!",
-                "testo": "Questa applicazione ti permette di creare e impaginare libri tecnici in formato PDF, "
-                         "utilizzando l'intelligenza artificiale (DeepSeek) per generare il contenuto e le immagini.\n\n"
-                         "Vediamo insieme come funziona il flusso di lavoro in 4 semplici passaggi."
-            },
-            {
-                "titolo": "1. Crea un Libro",
-                "testo": "Dalla schermata Home, clicca su «Crea nuovo libro».\n\n"
-                         "Compila i campi per generare la struttura di cartelle. L'app creerà automaticamente "
-                         "tutto lo scheletro del libro (capitoli, immagini, grafici, ecc.).\n\n"
-                         "Qui troverai anche i pulsanti per copiare i «Prompt di Inaugurazione» da dare a DeepSeek."
-            },
-            {
-                "titolo": "2. Estrai le Slide",
-                "testo": "Entra nel libro appena creato e clicca su «Estrattore slide».\n\n"
-                         "Carica il PDF delle slide del corso. L'app convertirà il PDF in immagini PNG "
-                         "che userai per generare le immagini all'interno del libro.\n\n"
-                         "Puoi anche usare lo strumento «Gestione immagini» per catturare porzioni di schermo."
-            },
-            {
-                "titolo": "3. Crea Capitoli e Paragrafi",
-                "testo": "Vai in «Modifica libro» per creare un nuovo capitolo, e poi crea i paragrafi.\n\n"
-                         "Per ogni paragrafo, l'app ti fornirà un pulsante «Copia regole per DeepSeek».\n"
-                         "Incolla le regole nella chat di DeepSeek (insieme alle slide caricate).\n\n"
-                         "DeepSeek genererà il codice Python. Copialo e incollalo nell'editor dell'app: "
-                         "il sistema validerà il codice e ti permetterà di salvare il paragrafo."
-            },
-            {
-                "titolo": "4. Leggi e Genera il PDF",
-                "testo": "Clicca su «Apri lettore» per visualizzare l'anteprima PDF di ogni paragrafo.\n\n"
-                         "Se il paragrafo contiene immagini, l'app ti chiederà di associarle alle figure estratte "
-                         "dalle slide.\n\n"
-                         "Puoi sempre rigenerare l'anteprima con il pulsante «Rigenera anteprima». "
-                         "Buon lavoro!"
-            }
-        ]
-
-        self._build_ui()
-        self._aggiorna_step()
-        self._centra_su_parent(parent)
-        
-        self.protocol("WM_DELETE_WINDOW", self._chiudi)
-        
-        self.after(80, self.lift)
-        self.after(80, self.focus_force)
+        risultato_capitolo = crea_capitolo(
+            self._root_demo,
+            self._slug_demo,
+            1,
+            titolo="Capitolo dimostrativo",
+        )
+        if not risultato_capitolo["ok"]:
+            raise RuntimeError(
+                "Impossibile preparare il capitolo dimostrativo: "
+                + " | ".join(risultato_capitolo["errori"])
+            )
 
     def _build_ui(self):
-        # Contenitore centrale
-        self.box = card(self)
-        self.box.grid(row=0, column=0, sticky="nsew", padx=24, pady=24)
-        self.box.grid_columnconfigure(0, weight=1)
-        self.box.grid_rowconfigure(1, weight=1)
+        box = card(self)
+        box.grid(row=0, column=0, sticky="nsew", padx=18, pady=18)
+        box.grid_columnconfigure(0, weight=1)
+        box.grid_rowconfigure(2, weight=1)
 
-        # Titolo
         self.lbl_titolo = ctk.CTkLabel(
-            self.box, text="",
-            font=ctk.CTkFont(size=22, weight="bold"),
-            text_color=tema.PRIMARIO, anchor="w",
+            box,
+            text="",
+            font=ctk.CTkFont(size=20, weight="bold"),
+            text_color=tema.PRIMARIO,
+            anchor="w",
         )
-        self.lbl_titolo.grid(row=0, column=0, sticky="w", padx=20, pady=(20, 10))
+        self.lbl_titolo.grid(row=0, column=0, sticky="ew", padx=18, pady=(16, 2))
 
-        # Testo
+        self.lbl_progresso = ctk.CTkLabel(
+            box,
+            text="",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color=tema.TESTO_MOLTO_TENUE,
+            anchor="w",
+        )
+        self.lbl_progresso.grid(row=1, column=0, sticky="ew", padx=18, pady=(0, 6))
+
         self.txt_spiegazione = ctk.CTkTextbox(
-            self.box,
-            font=ctk.CTkFont(size=14),
+            box,
+            height=100,
+            font=ctk.CTkFont(size=13),
             wrap="word",
             fg_color="transparent",
             text_color=tema.TESTO,
         )
-        self.txt_spiegazione.grid(row=1, column=0, sticky="nsew", padx=20, pady=(0, 20))
+        self.txt_spiegazione.grid(
+            row=2, column=0, sticky="nsew", padx=18, pady=(0, 8)
+        )
         self.txt_spiegazione.configure(state="disabled")
 
-        # Footer con pulsanti
-        footer = ctk.CTkFrame(self.box, fg_color="transparent")
-        footer.grid(row=2, column=0, sticky="ew", padx=20, pady=(0, 20))
+        footer = ctk.CTkFrame(box, fg_color="transparent")
+        footer.grid(row=3, column=0, sticky="ew", padx=18, pady=(0, 14))
         footer.grid_columnconfigure(1, weight=1)
 
-        self.btn_salta = bottone_secondario(
-            footer, "Salta tutorial", command=self._chiudi, width=120, height=38
+        bottone_secondario(
+            footer, "Termina tour", command=self._chiudi, width=120, height=36
+        ).grid(row=0, column=0, sticky="w")
+        self.lbl_schermata = ctk.CTkLabel(
+            footer,
+            text="",
+            font=ctk.CTkFont(size=11),
+            text_color=tema.TESTO_MOLTO_TENUE,
         )
-        self.btn_salta.grid(row=0, column=0, sticky="w")
-
-        # Indicatore passi (pallini)
-        self.frame_dots = ctk.CTkFrame(footer, fg_color="transparent")
-        self.frame_dots.grid(row=0, column=1, sticky="w", padx=20)
-
+        self.lbl_schermata.grid(row=0, column=1, sticky="ew", padx=8)
         self.btn_prev = bottone_secondario(
-            footer, "< Indietro", command=self._prev, width=100, height=38
+            footer, "Indietro", command=self._prev, width=95, height=36
         )
-        self.btn_prev.grid(row=0, column=2, sticky="e", padx=(0, 8))
-
+        self.btn_prev.grid(row=0, column=2, sticky="e", padx=(0, 6))
         self.btn_next = bottone_primario(
-            footer, "Avanti >", command=self._next, width=120, height=38
+            footer, "Avanti", command=self._next, width=110, height=36
         )
         self.btn_next.grid(row=0, column=3, sticky="e")
 
-    def _aggiorna_step(self):
-        step_data = self.steps[self.step]
-        
-        self.lbl_titolo.configure(text=step_data["titolo"])
-        
+        self.steps = [
+            {
+                "titolo": "Benvenuto nel tour di LIBRI",
+                "testo": (
+                    "Vedrai le schermate principali e il flusso per creare "
+                    "un libro. Premi Avanti per proseguire: il tour naviga "
+                    "nell'app e usa un libro dimostrativo temporaneo, senza "
+                    "modificare i tuoi libri."
+                ),
+                "schermata": "home",
+            },
+            {
+                "titolo": "Home",
+                "testo": (
+                    "Qui trovi i tuoi libri e il comando per crearne uno. "
+                    "Selezionando un libro accedi a capitoli, paragrafi, "
+                    "lettore, slide e immagini."
+                ),
+                "schermata": "home",
+            },
+            {
+                "titolo": "Creazione di un libro",
+                "testo": (
+                    "La schermata prepara un nuovo libro: compila nome e "
+                    "metadati e conferma per creare la struttura di cartelle. "
+                    "I prompt iniziali aiutano a impostare il lavoro con l'AI."
+                ),
+                "schermata": "crea_libro",
+            },
+            {
+                "titolo": "Scheda del libro",
+                "testo": (
+                    "La scheda riassume capitoli e paragrafi e dà accesso alle "
+                    "azioni del libro. Per questo tour è stato creato "
+                    "«LibroTourGuidato» in una cartella temporanea."
+                ),
+                "schermata": "libro",
+            },
+            {
+                "titolo": "Gestione dei capitoli",
+                "testo": (
+                    "Da Modifica libro puoi creare capitoli e aprirli per "
+                    "gestire i paragrafi. Il capitolo mostrato è un esempio "
+                    "temporaneo, predisposto per il tour."
+                ),
+                "schermata": "modifica_libro",
+            },
+            {
+                "titolo": "Creazione di un capitolo",
+                "testo": (
+                    "Inserisci titolo e numero del capitolo. Il capitolo "
+                    "organizza i paragrafi e può essere modificato "
+                    "separatamente."
+                ),
+                "schermata": "crea_capitolo",
+            },
+            {
+                "titolo": "Paragrafi",
+                "testo": (
+                    "Apri un capitolo per consultare i paragrafi o crearne "
+                    "uno. Il codice generato dall'AI si incolla nell'editor, "
+                    "dove puoi validarlo e salvarlo."
+                ),
+                "schermata": "capitolo",
+            },
+            {
+                "titolo": "Scrittura e fonti",
+                "testo": (
+                    "Qui trovi le regole di scrittura: privilegia la prosa "
+                    "discorsiva e usa definizioni, esempi, avvertenze e altri "
+                    "riquadri quando aiutano davvero la spiegazione. Puoi "
+                    "allegare slide e pagine di risorse extra."
+                ),
+                "schermata": "crea_paragrafo",
+            },
+            {
+                "titolo": "Slide e immagini",
+                "testo": (
+                    "L'estrattore converte le pagine di un PDF in immagini; "
+                    "seleziona le pagine da estrarre e associale poi ai "
+                    "paragrafi che le richiedono."
+                ),
+                "schermata": "estrattore_slide",
+            },
+            {
+                "titolo": "Gestione immagini",
+                "testo": (
+                    "Organizza le figure e gli altri materiali grafici del "
+                    "libro. Questa schermata consente di ispezionarli e "
+                    "prepararli per l'associazione ai paragrafi."
+                ),
+                "schermata": "gestione_immagini",
+            },
+            {
+                "titolo": "Lettura e anteprima",
+                "testo": (
+                    "Il lettore mostra l'anteprima PDF. Dopo aver salvato i "
+                    "paragrafi puoi rigenerare il PDF e consultare il libro "
+                    "impaginato. Il tour termina qui."
+                ),
+                "schermata": "lettore",
+            },
+        ]
+
+    def _mostra_schermata(self, nome: str):
+        metodi = {
+            "home": self.app.mostra_home,
+            "crea_libro": self.app.mostra_crea_libro,
+            "libro": lambda: self.app.mostra_libro(self._slug_demo),
+            "modifica_libro": lambda: self.app.mostra_modifica_libro(
+                self._slug_demo
+            ),
+            "crea_capitolo": lambda: self.app.mostra_crea_capitolo(
+                self._slug_demo
+            ),
+            "capitolo": lambda: self.app.mostra_capitolo(self._slug_demo, 1),
+            "crea_paragrafo": lambda: self.app.mostra_crea_paragrafo(
+                self._slug_demo, 1
+            ),
+            "estrattore_slide": lambda: self.app.mostra_estrattore_slide(
+                self._slug_demo
+            ),
+            "gestione_immagini": lambda: self.app.mostra_gestione_immagini(
+                self._slug_demo
+            ),
+            "lettore": lambda: self.app.mostra_lettore(self._slug_demo),
+        }
+        metodi[nome]()
+
+    def _mostra_step(self):
+        dati = self.steps[self.step]
+        self._mostra_schermata(dati["schermata"])
+        self.lbl_titolo.configure(text=dati["titolo"])
+        self.lbl_progresso.configure(
+            text=f"Passaggio {self.step + 1} di {len(self.steps)}"
+        )
         self.txt_spiegazione.configure(state="normal")
         self.txt_spiegazione.delete("1.0", "end")
-        self.txt_spiegazione.insert("1.0", step_data["testo"])
+        self.txt_spiegazione.insert("1.0", dati["testo"])
         self.txt_spiegazione.configure(state="disabled")
-
-        # Aggiorna stato pulsanti
-        if self.step == 0:
-            self.btn_prev.configure(state="disabled")
-        else:
-            self.btn_prev.configure(state="normal")
-
-        if self.step == len(self.steps) - 1:
-            self.btn_next.configure(text="Inizia a usare l'app", width=160, fg_color=tema.SUCCESSO, hover_color="#2e7d3a")
-        else:
-            self.btn_next.configure(text="Avanti >", width=120, fg_color=tema.PRIMARIO, hover_color=tema.PRIMARIO_HOVER)
-
-        # Aggiorna i pallini indicatori
-        for w in self.frame_dots.winfo_children():
-            w.destroy()
-            
-        for i in range(len(self.steps)):
-            colore = tema.PRIMARIO if i == self.step else tema.BG_INPUT
-            dot = ctk.CTkFrame(self.frame_dots, width=10, height=10, corner_radius=5, fg_color=colore)
-            dot.pack(side="left", padx=4)
+        self.lbl_schermata.configure(text="La schermata dell'app è dietro questo riquadro.")
+        self.btn_prev.configure(
+            state="normal" if self.step else "disabled"
+        )
+        self.btn_next.configure(
+            text="Termina" if self.step == len(self.steps) - 1 else "Avanti"
+        )
+        self.lift()
 
     def _next(self):
         if self.step < len(self.steps) - 1:
             self.step += 1
-            self._aggiorna_step()
+            self._mostra_step()
         else:
             self._chiudi()
 
     def _prev(self):
         if self.step > 0:
             self.step -= 1
-            self._aggiorna_step()
+            self._mostra_step()
 
     def _chiudi(self):
-        if self.on_finish:
-            try:
-                self.on_finish()
-            except Exception:
-                pass
-        self.destroy()
-
-    def _centra_su_parent(self, parent):
+        if self._chiuso:
+            return
+        self._chiuso = True
         try:
-            self.update_idletasks()
-            px = parent.winfo_rootx()
-            py = parent.winfo_rooty()
-            pw = parent.winfo_width()
-            ph = parent.winfo_height()
-            w = self.winfo_width()
-            h = self.winfo_height()
-            x = px + (pw - w) // 2
-            y = py + (ph - h) // 2
-            self.geometry(f"+{max(0, x)}+{max(0, y)}")
-        except Exception:
-            pass
+            self.app.root_progetto = self._root_originale
+            self.app.mostra_home()
+            if self.on_finish:
+                self.on_finish()
+        finally:
+            self._directory_demo.cleanup()
+            self.destroy()
+
+    def _posiziona_su_parent(self, parent):
+        parent.update_idletasks()
+        x = parent.winfo_rootx() + max(12, parent.winfo_width() - 600)
+        y = parent.winfo_rooty() + 60
+        self.geometry(f"+{x}+{y}")

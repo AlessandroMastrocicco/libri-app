@@ -1,5 +1,5 @@
 {
-  "version": "0.2.1",
+  "version": "0.3.0",
   "url": "https://github.com/AlessandroMastrocicco/libri-app/releases",
-  "changelog": "• Migliorati i prompt di scrittura dei paragrafi: testo più ampio, discorsivo e non frammentato.\n• Rafforzata l'integrazione organica di tutte le nozioni pertinenti da libri e appunti.\n• Aggiunta nel PDF una sezione finale per tracciare le nozioni alle slide e alle pagine delle fonti."
+  "changelog": "• Aggiunto installer Windows con collegamenti e icona LIBRI.\n• Attivato il controllo remoto delle nuove versioni GitHub all'avvio.\n• Trasformato il tutorial in un tour guidato delle schermate, con dati dimostrativi temporanei.\n• Migliorati i prompt: prosa ampia e discorsiva, con riquadri didattici quando utili."
 }

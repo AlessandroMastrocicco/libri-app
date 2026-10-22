@@ -944,11 +944,11 @@ class SchermataGestioneImmagini(ctk.CTkFrame):
         self.btn_prev.grid(row=0, column=0, padx=(0, 6))
 
         self.slider = ctk.CTkSlider(
-            bar, from_=1, to=1, number_of_steps=1,
+            bar, from_=0, to=1, number_of_steps=1, state="disabled",
             command=self._on_slider,
         )
         self.slider.grid(row=0, column=1, sticky="ew")
-        self.slider.set(1)
+        self.slider.set(0)
 
         self.btn_next = bottone_secondario(
             bar, ">  ", command=self._pagina_succ, width=60,
@@ -978,12 +978,13 @@ class SchermataGestioneImmagini(ctk.CTkFrame):
         self._slider_in_aggiornamento = True
         try:
             if n <= 1:
-                self.slider.configure(from_=1, to=1,
-                                       number_of_steps=1)
-                self.slider.set(1)
+                self.slider.configure(
+                    from_=0, to=1, number_of_steps=1, state="disabled"
+                )
+                self.slider.set(1 if n else 0)
             else:
                 self.slider.configure(from_=1, to=n,
-                                       number_of_steps=n - 1)
+                                       number_of_steps=n - 1, state="normal")
                 self.slider.set(self._idx_pagina + 1)
         finally:
             self._slider_in_aggiornamento = False
@@ -999,7 +1000,7 @@ class SchermataGestioneImmagini(ctk.CTkFrame):
             self.btn_cattura.configure(state="normal")
 
     def _on_slider(self, valore):
-        if self._slider_in_aggiornamento:
+        if self._slider_in_aggiornamento or len(self._pagine) <= 1:
             return
         try:
             idx = int(round(float(valore))) - 1

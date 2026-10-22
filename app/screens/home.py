@@ -237,6 +237,13 @@ class SchermataHome(ctk.CTkFrame):
             width=170,
         ).grid(row=0, column=2, sticky="w", padx=(8, 0))
 
+        bottone_secondario(
+            azioni,
+            "  Tour guidato",
+            command=self.app.avvia_tour_guidato,
+            width=150,
+        ).grid(row=0, column=3, sticky="w", padx=(8, 0))
+
     def _build_elenco(self):
         wrap = card(self)
         wrap.grid(row=2, column=0, sticky="nsew", padx=24, pady=(0, 24))

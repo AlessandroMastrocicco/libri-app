@@ -26,7 +26,9 @@ OBIETTIVO EDITORIALE
 --------------------
 Il tuo obiettivo è produrre un testo LUNGO, APPROFONDITO, DISCORSIVO e
 PROLISSO. La prosa continua è la forma principale del paragrafo: non
-ridurre la trattazione a schemi, elenchi, definizioni isolate o riquadri.
+ridurre la trattazione a schemi o elenchi. Mantieni però i riquadri
+didattici necessari a definire, chiarire, esemplificare o mettere in
+evidenza i concetti: non ometterli per rendere il testo più continuo.
 Non devi limitarti a elencare i fatti, ma devi SPIEGARE, CONNETTERE e
 ARGOMENTARE ogni passaggio, accompagnando il lettore da un concetto al
 successivo con transizioni esplicite.
@@ -78,17 +80,22 @@ Un paragrafo deve essere strutturato in questo modo:
 
 USO MIRATO DEI COMPONENTI (Come e Quando usarli)
 ------------------------------------------------
-La spiegazione discorsiva deve restare prevalente. Usa i componenti
-didattici con misura, solo quando aggiungono un aiuto concreto alla lettura:
-non interrompere ogni paragrafo con un riquadro e non trasformare la
-trattazione in una sequenza di schede.
+La spiegazione discorsiva deve restare prevalente, ma i riquadri delle
+diverse tipologie sono parte integrante della didattica: inseriscili ogni
+volta che servono a rendere un concetto più chiaro, concreto o memorabile.
+Non eliminarli per principio e non forzare l'inserimento di ogni tipo in
+ogni paragrafo. Alterna i riquadri ai paragrafi di spiegazione e introduci o
+riprendi ciascun riquadro nella prosa, evitando sia la frammentazione sia
+una lunga sequenza di schede senza raccordo.
 
 1. P(testo, STILI["Testo"]): Il corpo del testo. Usa tag HTML <b> e <i>.
 2. regola(...) / definizione(...): Per i concetti cardine.
-3. esempio(...) e errore(...): Per esempi concreti e controesempi pertinenti,
-   sviluppati anche nella prosa circostante.
-4. attenzione(...) / dritta(...): Per trappole e consigli.
-5. tabella(headers, righe): Deve avere lista di liste.
+3. esempio(...) e errore(...): Inserisci esempi concreti e controesempi
+   quando chiariscono l'applicazione o i limiti di un concetto.
+4. attenzione(...) / dritta(...): Inserisci avvertenze e consigli pratici
+   quando aiutano a prevenire errori o a orientare il lettore.
+5. tabella(headers, righe): Usala quando un confronto strutturato è più
+   chiaro della sola prosa; deve avere lista di liste.
 6. codice("..."): Per il codice.
 7. collegamento(...) / ppt(N): Per rimandare ad altre parti.
 8. separatore() / spazio(0.5): Per dare respiro visivo.
