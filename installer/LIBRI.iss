@@ -1,7 +1,10 @@
 #define AppName "LIBRI"
-#define AppVersion "0.4.0"
+#define AppVersion "0.4.1"
 #define AppPublisher "Alessandro Mastrocicco"
 #define AppExeName "LIBRI.exe"
+#ifndef BundleDir
+#define BundleDir "..\dist\LIBRI"
+#endif
 
 [Setup]
 AppId={{D3948F7B-106B-4D8B-9842-1C3E6C4B9A10}
@@ -26,7 +29,7 @@ WizardStyle=modern
 Name: "desktopicon"; Description: "Crea un collegamento sul desktop"; GroupDescription: "Collegamenti aggiuntivi:"; Flags: unchecked
 
 [Files]
-Source: "..\dist\LIBRI.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#BundleDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{autoprograms}\LIBRI"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\{#AppExeName}"

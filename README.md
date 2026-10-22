@@ -15,7 +15,7 @@ python main.py
 
 ## Installazione Windows
 
-Scarica `LIBRI-Setup-0.4.0.exe` dalla [release più recente](https://github.com/AlessandroMastrocicco/libri-app/releases/latest)
+Scarica `LIBRI-Setup-0.4.1.exe` dalla [release più recente](https://github.com/AlessandroMastrocicco/libri-app/releases/latest)
 ed eseguilo. L'installer aggiunge LIBRI al menu Start e, se selezionato,
 al desktop; i collegamenti mostrano il nome e l'icona dell'app, senza
 l'estensione `.exe`.

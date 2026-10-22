@@ -1,5 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+from PyInstaller.utils.hooks import collect_data_files
+
 a = Analysis(
     ['main.py'],  # Il tuo script principale
     pathex=[],
@@ -9,12 +11,15 @@ a = Analysis(
         # Includi la cartella 'app' e 'motore' (necessarie per gli import)
         ('app', 'app'),
         ('motore', 'motore'),
-        # Includi i file di CustomTkinter (obbligatorio)
-        ('.venv/Lib/site-packages/customtkinter', 'customtkinter'),
+        # Includi i file di CustomTkinter dal Python usato per la build.
+        *collect_data_files('customtkinter'),
         # Se hai un'icona, decommenta e modifica la riga sotto
         # ('icona.ico', '.'),
     ],
     hiddenimports=[
+        # I paragrafi generati importano questi moduli dinamicamente.
+        'motore.componenti',
+        'motore.stili',
         # Moduli che PyInstaller potrebbe non trovare da solo
         'PIL._imaging',
         'reportlab.graphics.barcode',
