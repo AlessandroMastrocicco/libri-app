@@ -1,5 +1,5 @@
 {
-  "version": "0.2.0",
+  "version": "0.2.1",
   "url": "https://github.com/AlessandroMastrocicco/libri-app/releases",
-  "changelog": "• Aggiunto il sistema di tutorial al primo avvio.\n• Migliorata la gestione degli eserciziari.\n• Risolti bug nel rendering delle immagini."
+  "changelog": "• Migliorati i prompt di scrittura dei paragrafi: testo più ampio, discorsivo e non frammentato.\n• Rafforzata l'integrazione organica di tutte le nozioni pertinenti da libri e appunti.\n• Aggiunta nel PDF una sezione finale per tracciare le nozioni alle slide e alle pagine delle fonti."
 }

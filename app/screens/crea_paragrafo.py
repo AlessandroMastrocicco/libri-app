@@ -214,8 +214,10 @@ class SchermataCreaParagrafo(ctk.CTkFrame):
         self.lbl_istruzioni = ctk.CTkLabel(
             form,
             text="1. Carica le slide in formato PNG nella chat.\n"
-                 "2. Copia le regole.\n"
-                 "3. Incolla le regole in chat. DeepSeek genererà il codice.\n"
+                 "2. Se usi risorse extra, carica anche le pagine pertinenti "
+                 "di appunti o libri con titolo e numero di pagina visibili.\n"
+                 "3. Copia le regole e incollale in chat. DeepSeek genererà "
+                 "il codice con le fonti in coda.\n"
                  "4. Copia il codice e incollalo nell'editor a fianco.",
             font=ctk.CTkFont(size=11), text_color=tema.TESTO_MOLTO_TENUE,
             wraplength=280, justify="left", anchor="w",
@@ -318,7 +320,7 @@ class SchermataCreaParagrafo(ctk.CTkFrame):
         else:
             self.frame_teoria_origine.grid_remove()
             self._titolo_header.configure(text="Nuovo paragrafo")
-            self.lbl_istruzioni.configure(text="1. Carica le slide in formato PNG nella chat.\n2. Copia le regole.\n3. Incolla le regole in chat. DeepSeek genererà il codice.\n4. Copia il codice e incollalo nell'editor a fianco.")
+            self.lbl_istruzioni.configure(text="1. Carica le slide in formato PNG nella chat.\n2. Se usi risorse extra, carica anche le pagine pertinenti di appunti o libri con titolo e numero di pagina visibili.\n3. Copia le regole e incollale in chat. DeepSeek genererà il codice con le fonti in coda.\n4. Copia il codice e incollalo nell'editor a fianco.")
             self.btn_copia.configure(text="  Copia regole paragrafo")
         self._aggiorna_anteprima()
 
