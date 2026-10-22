@@ -29,7 +29,17 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=[
+        # Dipendenze opzionali per audio/AI presenti nell'ambiente di build,
+        # non utilizzate da LIBRI e molto pesanti da distribuire.
+        'torch',
+        'torchaudio',
+        'transformers',
+        'TTS',
+        'trainer',
+        'scipy',
+        'sklearn',
+    ],
     noarchive=False,
 )
 pyz = PYZ(a.pure)
