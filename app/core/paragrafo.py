@@ -186,7 +186,7 @@ def _chiamate_sconosciute(tree: ast.Module) -> list[str]:
         "filter", "sorted", "min", "max", "sum", "abs", "round",
         "isinstance", "hasattr", "getattr", "setattr", "type",
         "Spacer", "Paragraph", "PageBreak", "Table", "TableStyle",
-        "KeepTogether", "ListFlowable", "ListItem", "Image", "cm",
+        "KeepTogether", "ListFlowable", "ListItem", "Image", "Path", "cm",
     }
     nomi_ok.update(_HELPER_IMMAGINI)
     for node in ast.walk(tree):

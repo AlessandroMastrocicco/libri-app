@@ -18,6 +18,7 @@ figlie di altre CTkToplevel non renderizzano immagini su Windows.
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import sys
 import tkinter as tk
@@ -49,6 +50,9 @@ from app.core.paragrafo import (
 from app.core.slide_extract import (
     carica_pagine,
     elenca_estratti,
+    leggi_mappatura_immagine,
+    riferimento_slide_da_nome,
+    salva_mappatura_immagine,
 )
 
 
@@ -365,13 +369,16 @@ class PopupAssociaImmagini(ctk.CTkToplevel):
             self,
             root_progetto=self.root_progetto,
             slug=self.slug,
+            cap=self.cap,
             nome_ref=nome_ref,
             dispense=dispense,
-            on_conferma=lambda img: self._salva_ritaglio(nome_ref, img),
+            on_conferma=lambda img, fonte: self._salva_ritaglio(
+                nome_ref, img, fonte
+            ),
         )
         self.wait_window(dialog)
 
-    def _salva_ritaglio(self, nome_ref: str, image_pil):
+    def _salva_ritaglio(self, nome_ref: str, image_pil, fonte: dict):
         res = salva_immagine_da_pil(
             self.root_progetto, self.slug, self.cap,
             nome_ref, image_pil,
@@ -383,12 +390,29 @@ class PopupAssociaImmagini(ctk.CTkToplevel):
                 parent=self,
             )
             return
+        mappatura = salva_mappatura_immagine(
+            self.root_progetto, self.slug, self.cap, nome_ref,
+            fonte["id_lezione"], fonte["dispensa"], fonte["slide"],
+        )
+        if not mappatura["ok"]:
+            dettagli = mappatura["errore"] or "Errore sconosciuto."
+            try:
+                res["path"].unlink()
+            except OSError as e:
+                dettagli += f"\nNon è stato possibile rimuovere il ritaglio: {e}"
+            messagebox.showerror(
+                "Errore mappatura slide",
+                dettagli,
+                parent=self,
+            )
+            return
         self.associazioni[nome_ref] = res["path"]
         w = self._widgets.get(nome_ref)
         if w:
             w["card"].configure(border_color=tema.SUCCESSO)
             w["lbl_stato"].configure(
-                text=f"Salvata come: {res['path'].name}",
+                text=f"Salvata da {fonte['id_lezione']} · slide "
+                     f"{fonte['slide']}: {res['path'].name}",
                 text_color=tema.SUCCESSO,
             )
             self._aggiorna_thumbnail(w, res["path"])
@@ -581,19 +605,42 @@ class DialogCatturaDaDispensa(tk.Toplevel):
     ACCENTO = "#00d4ff"
 
     def __init__(self, parent, root_progetto: Path, slug: str,
-                 nome_ref: str, dispense: list[dict],
+                 cap: int, nome_ref: str, dispense: list[dict],
                  on_conferma):
         super().__init__(parent)
 
         self.root_progetto = root_progetto
         self.slug = slug
+        self.cap = cap
         self.nome_ref = nome_ref
         self.dispense = list(dispense)
         self.on_conferma = on_conferma
 
+        self._mappatura_precedente = leggi_mappatura_immagine(
+            root_progetto, slug, cap, nome_ref
+        )
+        self._riferimento_slide = (
+            self._mappatura_precedente
+            or riferimento_slide_da_nome(nome_ref)
+        )
+        self._slide_da_selezionare = (
+            self._riferimento_slide.get("slide")
+            if self._riferimento_slide else None
+        )
+        self._lezione_auto_trovata = self._riferimento_slide is None
+        self._prima_caricamento = True
         self._idx_dispensa = 0
         self._pagine: list[Path] = []
         self._idx_pagina = 0
+
+        if self._riferimento_slide:
+            for i, dispensa in enumerate(self.dispense):
+                if dispensa.get("id_lezione") == self._riferimento_slide["id_lezione"]:
+                    self._idx_dispensa = i
+                    self._lezione_auto_trovata = True
+                    break
+            if not self._lezione_auto_trovata:
+                self._slide_da_selezionare = None
 
         self._img_originale = None       # PIL
         self._photo = None               # PhotoImage Tk
@@ -648,8 +695,13 @@ class DialogCatturaDaDispensa(tk.Toplevel):
             font=("Segoe UI", 11, "bold"),
         ).pack(side="left", padx=(0, 8))
 
-        valori = [d["dispensa"] for d in self.dispense]
-        self._var_dispensa = tk.StringVar(value=valori[0] if valori else "")
+        valori = [
+            f"{d['id_lezione']} — {d['dispensa']}"
+            for d in self.dispense
+        ]
+        self._var_dispensa = tk.StringVar(
+            value=valori[self._idx_dispensa] if valori else ""
+        )
         if valori:
             self._menu_dispensa = tk.OptionMenu(
                 header, self._var_dispensa, *valori,
@@ -787,10 +839,25 @@ class DialogCatturaDaDispensa(tk.Toplevel):
 
     def _on_cambia_dispensa(self, valore: str):
         for i, d in enumerate(self.dispense):
-            if d["dispensa"] == valore:
+            etichetta = f"{d['id_lezione']} — {d['dispensa']}"
+            if etichetta == valore:
                 self._idx_dispensa = i
                 break
+        self._lezione_auto_trovata = True
+        self._slide_da_selezionare = None
         self._carica_dispensa_corrente()
+        if self._riferimento_slide is None:
+            self.lbl_sel.configure(
+                text="Lezione selezionata: scegli la slide e ritaglia "
+                     "la porzione da usare.",
+                fg=self.FG_TENUE,
+            )
+        else:
+            self.lbl_sel.configure(
+                text="Lezione selezionata manualmente: naviga fino alla "
+                     "slide corretta e ritaglia la porzione.",
+                fg=self.FG_TENUE,
+            )
 
     def _carica_dispensa_corrente(self):
         if not self.dispense:
@@ -803,8 +870,49 @@ class DialogCatturaDaDispensa(tk.Toplevel):
             self._pagine = []
 
         self._idx_pagina = 0
+        slide_non_trovata = False
+        if self._prima_caricamento and self._slide_da_selezionare:
+            cercata = self._slide_da_selezionare
+            indice = next(
+                (
+                    i for i, path in enumerate(self._pagine)
+                    if (match := re.fullmatch(r"pagina_(\d+)", path.stem))
+                    and int(match.group(1)) == cercata
+                ),
+                None,
+            )
+            if indice is not None:
+                self._idx_pagina = indice
+            else:
+                slide_non_trovata = True
+            self._prima_caricamento = False
         self._aggiorna_slider()
         self._carica_pagina()
+        if slide_non_trovata:
+            self.lbl_sel.configure(
+                text=f"Slide {self._slide_da_selezionare} non trovata in "
+                     f"questa estrazione. Seleziona la slide corretta.",
+                fg=self.FG_TENUE,
+            )
+        elif not self._lezione_auto_trovata:
+            self.lbl_sel.configure(
+                text="Riferimento lezione non trovato. Seleziona la lezione "
+                     "e la slide corretta.",
+                fg=self.FG_TENUE,
+            )
+        elif (self._riferimento_slide and self._slide_da_selezionare
+              and not self._pagine):
+            self.lbl_sel.configure(
+                text="Slide non disponibile in questa lezione. "
+                     "Scegli una lezione o una slide diversa.",
+                fg=self.FG_TENUE,
+            )
+        elif self._riferimento_slide is None:
+            self.lbl_sel.configure(
+                text="Nessun riferimento automatico: seleziona la lezione "
+                     "e la slide corretta.",
+                fg=self.FG_TENUE,
+            )
 
     def _carica_pagina(self):
         self.canvas.delete("all")
@@ -943,8 +1051,14 @@ class DialogCatturaDaDispensa(tk.Toplevel):
             self.after(0, lambda: setattr(self, "_slider_busy", False))
 
         if n:
+            path_corrente = self._pagine[self._idx_pagina]
+            match = re.fullmatch(r"pagina_(\d+)", path_corrente.stem)
+            numero_slide = (
+                int(match.group(1)) if match else self._idx_pagina + 1
+            )
             self.lbl_pagina.configure(
-                text=f"pagina {self._idx_pagina + 1} / {n}"
+                text=f"slide {numero_slide} · "
+                     f"{self._idx_pagina + 1}/{n}"
             )
             self.btn_prev.configure(
                 state="normal" if self._idx_pagina > 0 else "disabled"
@@ -959,8 +1073,8 @@ class DialogCatturaDaDispensa(tk.Toplevel):
             self.btn_next.configure(state="disabled")
 
         self.lbl_info.configure(
-            text=f"{len(self.dispense)} dispense · "
-                 f"{len(self._pagine)} pagine"
+            text=f"{self.dispense[self._idx_dispensa]['id_lezione']} · "
+                 f"{len(self._pagine)} slide estratte"
         )
 
     def _prec(self):
@@ -1121,12 +1235,23 @@ class DialogCatturaDaDispensa(tk.Toplevel):
             return
 
         cb = self.on_conferma
+        dispensa = self.dispense[self._idx_dispensa]
+        match = re.fullmatch(r"pagina_(\d+)", self._pagine[self._idx_pagina].stem)
+        numero_slide = int(match.group(1)) if match else self._idx_pagina + 1
+        fonte = {
+            "id_lezione": dispensa["id_lezione"],
+            "dispensa": dispensa["dispensa"],
+            "slide": numero_slide,
+        }
         self.destroy()
         if cb is not None:
             try:
-                cb(ritaglio)
-            except Exception:
-                pass
+                cb(ritaglio, fonte)
+            except Exception as e:
+                messagebox.showerror(
+                    "Errore salvataggio immagine",
+                    f"Impossibile salvare il ritaglio e la sua mappatura: {e}",
+                )
 
     def _centra_su_parent(self, parent):
         try:

@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
-from app.ui.tutorial import TutorialWizard
+from app.ui.tutorial import TutorialWizard, coordinate_centro_schermo
 
 
 class TestPreparazioneTour(unittest.TestCase):
@@ -18,6 +18,12 @@ class TestPreparazioneTour(unittest.TestCase):
             libro = root_demo / "libri" / "LibroTourGuidato"
             self.assertTrue((libro / "capitoli" / "capitolo_01").is_dir())
             self.assertTrue((libro / "immagini").is_dir())
+
+    def test_centro_schermo_indipendente_dalla_posizione_del_parent(self):
+        self.assertEqual(
+            coordinate_centro_schermo(570, 310, 1920, 1080),
+            (675, 385),
+        )
 
 
 if __name__ == "__main__":

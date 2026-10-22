@@ -26,6 +26,167 @@ def _slug(s: str) -> str:
     return s or "senza_nome"
 
 
+def _id_lezione_valido(valore: str) -> bool:
+    return re.fullmatch(r"L[1-9]\d*", valore or "", flags=re.IGNORECASE) is not None
+
+
+def _id_lezione_da_nome(nome: str) -> str | None:
+    match = re.match(
+        r"^(?:L|LEZIONE)[ _-]*0*(\d+)(?:$|[_ -])",
+        nome or "",
+        flags=re.IGNORECASE,
+    )
+    if not match:
+        return None
+    numero = int(match.group(1))
+    return f"L{numero}" if numero > 0 else None
+
+
+def _mappa_lezioni(libro_dir: Path, cartelle: list[Path]) -> dict[str, str]:
+    path_mappa = libro_dir / "slide_estratte" / "_mappatura_lezioni.json"
+    mappa_precedente = {}
+    if path_mappa.is_file():
+        try:
+            dati = json.loads(path_mappa.read_text(encoding="utf-8"))
+            if not isinstance(dati, dict):
+                raise ValueError("formato JSON non valido")
+            valori = dati.get("lezioni", {})
+            if isinstance(valori, dict):
+                mappa_precedente = {
+                    nome: identificatore
+                    for nome, identificatore in valori.items()
+                    if isinstance(nome, str)
+                    and isinstance(identificatore, str)
+                    and _id_lezione_valido(identificatore)
+                }
+        except (OSError, json.JSONDecodeError, ValueError) as e:
+            print(f"[slide_extract] Impossibile leggere la mappatura delle lezioni: {e}")
+
+    risultato = {}
+    usati = set()
+
+    for cartella in cartelle:
+        identificatore = mappa_precedente.get(cartella.name)
+        if identificatore and identificatore.upper() not in usati:
+            risultato[cartella.name] = identificatore.upper()
+            usati.add(identificatore.upper())
+
+    for cartella in cartelle:
+        if cartella.name in risultato:
+            continue
+        identificatore = _id_lezione_da_nome(cartella.name)
+        if identificatore and identificatore not in usati:
+            risultato[cartella.name] = identificatore
+            usati.add(identificatore)
+
+    prossimo = 1
+    for cartella in cartelle:
+        if cartella.name in risultato:
+            continue
+        while f"L{prossimo}" in usati:
+            prossimo += 1
+        risultato[cartella.name] = f"L{prossimo}"
+        usati.add(f"L{prossimo}")
+        prossimo += 1
+
+    if mappa_precedente != risultato:
+        try:
+            scrivi_testo(
+                path_mappa,
+                json.dumps({"versione": 1, "lezioni": risultato},
+                           ensure_ascii=False, indent=2),
+            )
+        except OSError as e:
+            print(f"[slide_extract] Impossibile salvare la mappatura delle lezioni: {e}")
+
+    return risultato
+
+
+def riferimento_slide_da_nome(nome_file: str) -> dict | None:
+    match = re.search(
+        r"(?<![A-Z0-9])L(\d+)[_-]S(?:LIDE)?[_-]?0*(\d+)(?!\d)",
+        Path(nome_file).name,
+        flags=re.IGNORECASE,
+    )
+    if not match:
+        return None
+    lezione, slide = int(match.group(1)), int(match.group(2))
+    if lezione < 1 or slide < 1:
+        return None
+    return {"id_lezione": f"L{lezione}", "slide": slide}
+
+
+def percorso_mappatura_immagini(root: Path, libro: str, cap: int) -> Path:
+    return (
+        Path(root) / "libri" / libro / "capitoli"
+        / f"capitolo_{cap:02d}" / "immagini" / "_mappatura_slide.json"
+    )
+
+
+def leggi_mappatura_immagine(root: Path, libro: str, cap: int,
+                             nome_file: str) -> dict | None:
+    path = percorso_mappatura_immagini(root, libro, cap)
+    if not path.is_file():
+        return None
+    try:
+        dati = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as e:
+        print(f"[slide_extract] Impossibile leggere la mappatura delle immagini: {e}")
+        return None
+    immagini = dati.get("immagini", {}) if isinstance(dati, dict) else {}
+    mappatura = immagini.get(Path(nome_file).name) if isinstance(immagini, dict) else None
+    if not isinstance(mappatura, dict):
+        return None
+    identificatore = mappatura.get("id_lezione")
+    slide = mappatura.get("slide")
+    if (not isinstance(identificatore, str)
+            or not _id_lezione_valido(identificatore)
+            or isinstance(slide, bool)
+            or not isinstance(slide, int)
+            or slide < 1):
+        return None
+    return {
+        "id_lezione": identificatore.upper(),
+        "slide": slide,
+        "dispensa": mappatura.get("dispensa", ""),
+    }
+
+
+def salva_mappatura_immagine(root: Path, libro: str, cap: int,
+                             nome_file: str, id_lezione: str,
+                             dispensa: str, slide: int) -> dict:
+    identificatore = (id_lezione or "").upper()
+    if not _id_lezione_valido(identificatore):
+        return {"ok": False, "errore": "Identificatore lezione non valido."}
+    if not isinstance(slide, int) or slide < 1:
+        return {"ok": False, "errore": "Numero slide non valido."}
+    nome = Path(nome_file).name
+    if not nome:
+        return {"ok": False, "errore": "Nome immagine non valido."}
+
+    path = percorso_mappatura_immagini(root, libro, cap)
+    dati = {"versione": 1, "immagini": {}}
+    if path.is_file():
+        try:
+            dati_letti = json.loads(path.read_text(encoding="utf-8"))
+            if not isinstance(dati_letti, dict) or not isinstance(dati_letti.get("immagini"), dict):
+                return {"ok": False, "errore": "Il file di mappatura delle immagini non è valido."}
+            dati = dati_letti
+        except (OSError, json.JSONDecodeError) as e:
+            return {"ok": False, "errore": f"Impossibile leggere la mappatura delle immagini: {e}"}
+
+    dati["immagini"][nome] = {
+        "id_lezione": identificatore,
+        "dispensa": dispensa,
+        "slide": slide,
+    }
+    try:
+        scrivi_testo(path, json.dumps(dati, ensure_ascii=False, indent=2))
+    except OSError as e:
+        return {"ok": False, "errore": f"Impossibile salvare la mappatura delle immagini: {e}"}
+    return {"ok": True, "path": path}
+
+
 def _dpi_da_qualita(qualita: str) -> int:
     return {
         "bassa": 96,
@@ -191,17 +352,24 @@ def estrai_pdf(root: Path, pdf: Path, libro: str,
 # ======================================================================
 
 def elenca_estratti(root: Path, libro: str) -> list[dict]:
-    base = Path(root) / "libri" / libro / "slide_estratte"
+    libro_dir = Path(root) / "libri" / libro
+    base = libro_dir / "slide_estratte"
     if not base.is_dir():
         return []
 
-    out = []
-    for disp_dir in sorted(base.iterdir()):
+    cartelle = []
+    for disp_dir in sorted(base.iterdir(), key=lambda p: p.name.lower()):
         if not disp_dir.is_dir() or disp_dir.name.startswith("_"):
             continue
         pagine = sorted(disp_dir.glob("pagina_*.png"))
         if not pagine:
             continue
+        cartelle.append(disp_dir)
+
+    mappa_lezioni = _mappa_lezioni(libro_dir, cartelle)
+    out = []
+    for disp_dir in cartelle:
+        pagine = sorted(disp_dir.glob("pagina_*.png"))
         meta_path = disp_dir / "_meta.json"
         data = ""
         if meta_path.is_file():
@@ -212,6 +380,7 @@ def elenca_estratti(root: Path, libro: str) -> list[dict]:
                 pass
         out.append({
             "dispensa": disp_dir.name,
+            "id_lezione": mappa_lezioni[disp_dir.name],
             "cartella": disp_dir,
             "n_pagine": len(pagine),
             "data": data,

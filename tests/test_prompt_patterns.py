@@ -18,6 +18,11 @@ class TestPromptParagrafi(unittest.TestCase):
     def test_prompt_risorse_extra_mantiene_riquadri_utili(self):
         self.assertIn("riquadri didattici necessari", PATTERN_RISORSE_EXTRA)
 
+    def test_prompt_mappa_figure_a_lezione_e_slide_selezionabili(self):
+        self.assertIn('figura("L1_S003_nome_descrittivo.png")', PATTERN_PARAGRAFO)
+        self.assertIn("l'utente può scegliere un'altra lezione", PATTERN_PARAGRAFO)
+        self.assertIn("selezioni manualmente lezione e", PATTERN_PARAGRAFO)
+
 
 if __name__ == "__main__":
     unittest.main()

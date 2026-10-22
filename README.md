@@ -15,7 +15,7 @@ python main.py
 
 ## Installazione Windows
 
-Scarica `LIBRI-Setup-0.3.0.exe` dalla [release più recente](https://github.com/AlessandroMastrocicco/libri-app/releases/latest)
+Scarica `LIBRI-Setup-0.4.0.exe` dalla [release più recente](https://github.com/AlessandroMastrocicco/libri-app/releases/latest)
 ed eseguilo. L'installer aggiunge LIBRI al menu Start e, se selezionato,
 al desktop; i collegamenti mostrano il nome e l'icona dell'app, senza
 l'estensione `.exe`.
@@ -25,7 +25,15 @@ controllo richiede una connessione Internet; se non è disponibile, l'app
 continua ad avviarsi normalmente.
 
 Il tour guidato attraversa le schermate dell'app usando un libro
-dimostrativo temporaneo, senza modificare i dati personali.
+dimostrativo temporaneo, senza modificare i dati personali. Si apre al centro
+dello schermo e può essere spostato.
+
+Durante la validazione del codice dei paragrafi, i nomi delle figure nel
+formato `L1_S003_nome.png` preselezionano la lezione e la slide di origine.
+Le estrazioni esistenti ricevono automaticamente identificatori `L1`, `L2`,
+ecc.; se l'associazione automatica non è corretta, la lezione e la slide
+possono essere selezionate manualmente. La sorgente del ritaglio viene
+registrata con l'immagine del capitolo.
 
 Al primo avvio da sorgente l'app crea la cartella `libri` nella directory
 del progetto. I contenuti aggiunti dall'utente restano locali e non sono

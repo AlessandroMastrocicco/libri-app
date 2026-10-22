@@ -218,7 +218,10 @@ class SchermataCreaParagrafo(ctk.CTkFrame):
                  "di appunti o libri con titolo e numero di pagina visibili.\n"
                  "3. Copia le regole e incollale in chat. DeepSeek genererà "
                  "il codice con le fonti in coda.\n"
-                 "4. Copia il codice e incollalo nell'editor a fianco.",
+                 "4. Usa nei nomi delle figure l'identificatore L1 e il numero "
+                 "slide, per esempio L1_S003.\n"
+                 "5. Valida il codice: potrai ritagliare le figure dalla slide "
+                 "preselezionata o correggere lezione e slide.",
             font=ctk.CTkFont(size=11), text_color=tema.TESTO_MOLTO_TENUE,
             wraplength=280, justify="left", anchor="w",
         )
@@ -320,7 +323,7 @@ class SchermataCreaParagrafo(ctk.CTkFrame):
         else:
             self.frame_teoria_origine.grid_remove()
             self._titolo_header.configure(text="Nuovo paragrafo")
-            self.lbl_istruzioni.configure(text="1. Carica le slide in formato PNG nella chat.\n2. Se usi risorse extra, carica anche le pagine pertinenti di appunti o libri con titolo e numero di pagina visibili.\n3. Copia le regole e incollale in chat. DeepSeek genererà il codice con le fonti in coda.\n4. Copia il codice e incollalo nell'editor a fianco.")
+            self.lbl_istruzioni.configure(text="1. Carica le slide in formato PNG nella chat.\n2. Se usi risorse extra, carica anche le pagine pertinenti di appunti o libri con titolo e numero di pagina visibili.\n3. Copia le regole e incollale in chat. DeepSeek genererà il codice con le fonti in coda.\n4. Usa nei nomi delle figure L1 e il numero slide, per esempio L1_S003.\n5. Valida il codice: potrai ritagliare dalla slide preselezionata o correggere lezione e slide.")
             self.btn_copia.configure(text="  Copia regole paragrafo")
         self._aggiorna_anteprima()
 

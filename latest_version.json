@@ -1,5 +1,5 @@
 {
-  "version": "0.3.0",
+  "version": "0.4.0",
   "url": "https://github.com/AlessandroMastrocicco/libri-app/releases",
-  "changelog": "• Aggiunto installer Windows con collegamenti e icona LIBRI.\n• Attivato il controllo remoto delle nuove versioni GitHub all'avvio.\n• Trasformato il tutorial in un tour guidato delle schermate, con dati dimostrativi temporanei.\n• Migliorati i prompt: prosa ampia e discorsiva, con riquadri didattici quando utili."
+  "changelog": "• Il tour guidato ora si apre al centro dello schermo e può essere spostato.\n• Le figure generate dal prompt usano ID lezione L1, L2... e numero slide per la mappatura automatica.\n• Durante la validazione è possibile correggere manualmente lezione e slide e salvare la sorgente effettiva del ritaglio.\n• Le estrazioni slide già presenti vengono migrate automaticamente a identificatori L1, L2... senza modificare i file delle slide."
 }

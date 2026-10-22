@@ -22,6 +22,38 @@ le immagini (PNG) delle slide di riferimento.
 Se le slide non sono presenti, fermati e rispondi SOLO con la frase:
 "Attendo il caricamento delle slide in formato PNG per procedere."
 
+IDENTIFICAZIONE DELLE LEZIONI E MAPPATURA DELLE FIGURE
+------------------------------------------------------
+L'app assegna alle lezioni gli identificatori L1, L2, L3 e così via.
+Quando scegli una figura da una slide, inseriscila nel codice tramite
+`figura("L1_S003_nome_descrittivo.png")`, sostituendo L1 con l'identificatore
+della lezione e S003 con il numero originale della slide (tre cifre, per
+esempio S012 per la slide 12). Usa esattamente lo stesso nome nell'elenco
+finale delle immagini e non riutilizzare nomi per figure diverse.
+
+Definisci una sola volta l'helper seguente prima di `story()`:
+    from pathlib import Path
+    from reportlab.lib.units import cm
+    from reportlab.platypus import Image
+
+    def figura(nome_file):
+        percorso = Path(__file__).resolve().parents[1] / "immagini" / nome_file
+        return Image(str(percorso), width=15*cm, height=10*cm,
+                     kind="proportional")
+
+Inserisci ogni chiamata a `figura(...)` come flowable separato nella lista
+restituita da `story()`, non annidarla dentro `P()` o un altro componente.
+Durante «Valida codice», LIBRI usa Lx e Sxxx per preselezionare la lezione
+e la slide e apre la cattura della porzione da includere. Se la selezione
+automatica non corrisponde, l'utente può scegliere un'altra lezione e
+navigare fino alla slide corretta prima di ritagliare. La mappatura salvata
+registra la lezione e la slide effettivamente selezionate.
+
+Per paragrafi o estrazioni precedenti a questa versione, non inventare gli
+identificatori: usa gli ID mostrati da LIBRI; se una figura non contiene un
+riferimento Lx_Sxxx, lascia che l'utente selezioni manualmente lezione e
+slide durante la validazione.
+
 OBIETTIVO EDITORIALE
 --------------------
 Il tuo obiettivo è produrre un testo LUNGO, APPROFONDITO, DISCORSIVO e
@@ -164,7 +196,7 @@ REGOLE DI FORMATTAZIONE (A PROVA DI ERRORE CRITICO)
 ELENCO DELLE FIGURE (In fondo al file, FUORI dal blocco markdown)
 -----------------------------------------------------------------
 # ELENCO_IMMAGINI:
-# 1. Nome file: "1.1_schema.png"
+# 1. Nome file: "L1_S003_schema.png"
 #    Cosa è: Schema a blocchi dell'architettura di von Neumann.
-#    Dove si trova: Slide 3, in alto al centro.
+#    Dove si trova: L1, slide 3, in alto al centro.
 """

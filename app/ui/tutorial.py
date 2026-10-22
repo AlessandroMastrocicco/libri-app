@@ -14,6 +14,15 @@ from app.ui import tema
 from app.ui.widgets import bottone_primario, bottone_secondario, card
 
 
+def coordinate_centro_schermo(larghezza: int, altezza: int,
+                              larghezza_schermo: int,
+                              altezza_schermo: int) -> tuple[int, int]:
+    return (
+        max(0, (larghezza_schermo - larghezza) // 2),
+        max(0, (altezza_schermo - altezza) // 2),
+    )
+
+
 class TutorialWizard(ctk.CTkToplevel):
     def __init__(self, parent, on_finish=None):
         super().__init__(parent)
@@ -41,7 +50,7 @@ class TutorialWizard(ctk.CTkToplevel):
             self.grid_rowconfigure(0, weight=1)
             self._build_ui()
             self._mostra_step()
-            self._posiziona_su_parent(parent)
+            self._posiziona_al_centro_schermo()
             self.protocol("WM_DELETE_WINDOW", self._chiudi)
             self.after(80, self.lift)
             self.after(80, self.focus_force)
@@ -314,8 +323,12 @@ class TutorialWizard(ctk.CTkToplevel):
             self._directory_demo.cleanup()
             self.destroy()
 
-    def _posiziona_su_parent(self, parent):
-        parent.update_idletasks()
-        x = parent.winfo_rootx() + max(12, parent.winfo_width() - 600)
-        y = parent.winfo_rooty() + 60
+    def _posiziona_al_centro_schermo(self):
+        self.update_idletasks()
+        larghezza = self.winfo_width()
+        altezza = self.winfo_height()
+        x, y = coordinate_centro_schermo(
+            larghezza, altezza,
+            self.winfo_screenwidth(), self.winfo_screenheight(),
+        )
         self.geometry(f"+{x}+{y}")
