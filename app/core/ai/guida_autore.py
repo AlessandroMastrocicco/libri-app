@@ -221,7 +221,13 @@ def vincoli_operativi(titolo_paragrafo: str) -> str:
         f"Stai scrivendo il paragrafo '{titolo_paragrafo}'. Prima della prosa "
         "emetti il MINI-PIANO (schema obbligatorio sopra), poi scrivi "
         "saldando ogni debito di spiegazione delle slide ricevute, secondo la "
-        "guida autore. Chiudi con l'autoverifica in forma sintetica."
+        "guida autore. Regole dure: mai riferimenti alle slide nel corpo; "
+        "blocco Fonti/Tratto da/Elaborazione dell'autore in coda a OGNI "
+        "sottoparagrafo con ID Lx_Sxxx precisi; lunghezza senza tetti, "
+        "decisa dalla ricchezza delle slide; non toccare concetti dei "
+        "paragrafi successivi (solo citazioni brevi con rimando interno); "
+        "slide illeggibile o ambigua -> 'da verificare', non indovinare. "
+        "Chiudi con l'autoverifica in forma sintetica."
     )
 
 

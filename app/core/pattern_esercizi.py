@@ -20,7 +20,10 @@ Produci un SOLO file Python completo, eseguibile e importabile.
 Il contenuto deve essere ESCLUSIVAMENTE composto da domande teoriche aperte, 
 quesiti ed esercizi basati sui concetti delle slide.
 NON introdurre nuovi concetti teorici. Fai solo domande su ciò che è già 
-stato spiegato nella teoria.
+stato spiegato nella teoria. Nelle tracce e nelle soluzioni NON compare
+mai alcun riferimento alle slide ("come a lezione", "vedi dispensa"):
+gli esercizi si leggono come parte autonoma del libro (guida autore,
+sez. 2).
 
 STRUTTURA DEL FILE (obbligatoria, nell'ordine)
 ----------------------------------------------

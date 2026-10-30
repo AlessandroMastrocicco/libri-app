@@ -64,7 +64,12 @@ evidenza i concetti: non ometterli per rendere il testo più continuo.
 Non devi limitarti a elencare i fatti, ma devi SPIEGARE, CONNETTERE e
 ARGOMENTARE ogni passaggio, accompagnando il lettore da un concetto al
 successivo con transizioni esplicite.
-Punta a una lunghezza compresa tra le 1500 e le 3000 parole per paragrafo.
+La lunghezza NON ha tetto né minimo numerico: segue la ricchezza del
+contenuto (guida autore, sez. 7.6). Una slide densa di spunti merita pagine;
+una slide di transizione poche righe. Il test non e' "quante parole ho
+scritto?" ma "tutto cio' che le slide contengono o implicare e' stato
+spiegato fino in fondo?". Mai accorciare per stare in una risposta: chiudi il
+blocco al punto naturale e dichiara la continuazione.
 Il tono deve essere "noi didattico": accademico, preciso, ma accessibile. 
 Usa frasi articolate e paragrafi sviluppati, non frasi isolate o appunti
 telegrafici. Spiega sempre il PERCHÉ dietro un meccanismo, non solo il COME;
@@ -146,18 +151,26 @@ Le slide determinano sempre scaletta, argomento e ordine della trattazione:
 le risorse extra approfondiscono la scaletta, non la sostituiscono né
 introducono deviazioni.
 
-Al termine della story(), dopo la spiegazione e il recap, inserisci una
-sezione "Fonti e integrazioni" composta da brevi paragrafi leggibili nel PDF.
-Per OGNI nozione integrata da risorse extra, specifica la nozione e tutte le
-fonti esatte: numero della slide, titolo del libro o degli appunti e relativo
-numero di pagina. Riporta tutte le fonti pertinenti quando una nozione è
-confermata da più risorse. Indica anche le slide usate per i
-concetti portanti. Non inventare numeri di pagina o riferimenti: se non sono
-visibili o ricavabili, segnala esplicitamente "pagina non identificabile"
-e indica il nome del file o l'ordine dell'immagine fornita. Se non sono
-state fornite risorse extra, la sezione deve riportare le sole slide; se
-non è possibile identificare una fonte con certezza, dichiaralo invece di
-attribuirle una nozione per supposizione.
+BLOCCO FONTI IN CODA A OGNI SOTTOPARAGRAFO (guida autore, sez. 11.2 —
+prevale su qualsiasi descrizione di una sezione finale unica): alla fine di
+CIASCUN sottoparagrafo, subito prima del titolo del successivo, inserisci un
+blocco visivamente distinto dalla prosa, composto da tre P(..., STILI["TestoPiccolo"]):
+    Fonti: Slide Lx_Sxxx, ...
+    Tratto da: [elemento preciso] (Lx_Sxxx); [altro elemento] (Lx_Syyy)
+    Elaborazione dell'autore: [spiegazioni, esempi, analogie, collegamenti,
+    limiti ed errori comuni che hai aggiunto tu e che NON sono nelle slide]
+Regole: usa sempre ID precisi nel formato Lx_Sxxx; "Tratto da" e' granulare
+(definizioni, formule, procedimenti, esempi, schemi, immagini, ciascuno con
+la slide esatta; se hai riformulato liberamente scrivi "riformulazione di");
+le immagini riprese dalle slide compaiono in "Tratto da" con la slide di
+origine, mentre nel testo e nella didascalia non c'e' alcun riferimento alla
+slide; per nozioni integrate da risorse extra indica anche titolo del libro/
+appunti e numero di pagina ("pagina non identificabile" se non ricavabile).
+Non citare slide non ricevute e non inventare riferimenti: se una fonte non
+e' certa, dichiaralo. Il corpo del testo non deve MAI contenere frasi come
+"la slide afferma", "come riportato nelle dispense", "il docente sottolinea".
+Dopo il recap finale non serve una sezione fonti separata: le fonti stanno
+gia' in coda a ogni sottoparagrafo.
 
 REGOLA CRITICA SUI COMPONENTI (FLOWABLES)
 -----------------------------------------
