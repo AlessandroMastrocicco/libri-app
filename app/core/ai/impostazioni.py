@@ -38,6 +38,14 @@ class LeggiChiavi:
         self._root = Path(root_progetto or "libri")
         self._config = self._leggi_config()
         self._env = self._leggi_env()
+        # Accensione facile primo avvio: se l'utente NON ha ancora scritto
+        # una scelta esplicita sul consenso e ci sono chiavi cloud nel .env,
+        # si assume acconsenta (li ha messi lui). Il flag esplicito in
+        # libri/_ai_config.json vince sempre; senza chiavi il comportamento
+        # resta identico a prima (solo Ollama locale).
+        if ("privacy" not in self._config
+                and any(self.per(p) for p in AMB if p != "ollama")):
+            self._config.setdefault("privacy", {})["consenso_cloud"] = True
 
     # ---------- sorgenti ----------
 
