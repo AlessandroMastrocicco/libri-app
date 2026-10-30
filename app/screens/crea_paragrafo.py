@@ -231,10 +231,28 @@ class SchermataCreaParagrafo(ctk.CTkFrame):
         self.btn_copia = bottone_primario(
             form, "  Copia regole paragrafo", command=self._copia_pattern, width=260,
         )
-        self.btn_copia.grid(row=r, column=0, sticky="ew", padx=16, pady=(0, 14))
+        self.btn_copia.grid(row=r, column=0, sticky="ew", padx=16, pady=(0, 8))
+        r += 1
+
+        # --- modalita' assistita (infrastruttura AI: app/core/ai) ---------
+        self._var_assistita = ctk.BooleanVar(value=False)
+        self.chk_assistita = ctk.CTkCheckBox(
+            form, text="Genera automaticamente con l'AI",
+            variable=self._var_assistita, font=ctk.CTkFont(size=12))
+        self.chk_assistita.grid(row=r, column=0, sticky="w", padx=16, pady=(0, 6))
+        r += 1
+
+        self.opt_dispensa = ctk.CTkOptionMenu(form, values=[""], font=ctk.CTkFont(size=12))
+        self.opt_dispensa.grid(row=r, column=0, sticky="ew", padx=16, pady=(0, 8))
+        r += 1
+
+        self.btn_genera = bottone_secondario(
+            form, "  Genera con AI", command=self._genera_assistito, width=260)
+        self.btn_genera.grid(row=r, column=0, sticky="ew", padx=16, pady=(0, 14))
         r += 1
 
         form.grid_rowconfigure(r, weight=1)
+        self._popola_dispense()
 
     def _build_editor(self, parent):
         wrap = card(parent)
@@ -376,6 +394,150 @@ class SchermataCreaParagrafo(ctk.CTkFrame):
         self._contenuto_validato = None
         self._aggiorna_stato_pulsanti_salva()
         self._set_stato("Contenuto incollato. Premi «Valida codice».", colore=tema.AVVISO)
+
+    # ------------------------------------------------------------------
+    # Modalita' assistita (AI). Logica pesante in app/core/ai/*, qui solo
+    # orchestrazione UI: thread di lavoro + coda messaggi + approvazione.
+    # ------------------------------------------------------------------
+
+    def _popola_dispense(self):
+        """Elenco delle dispense con slide estratte (per il selettore)."""
+        self._dispense: dict[str, str] = {}   # nome -> id_lezione
+        try:
+            from app.core.slide_extract import elenca_estratti
+            for e in elenca_estratti(self.app.root_progetto, self.slug):
+                nome = e.get("dispensa") or ""
+                if nome:
+                    self._dispense[nome] = e.get("id_lezione") or "L1"
+            nomi = list(self._dispense)
+            self.opt_dispensa.configure(values=nomi or ["Nessuna dispensa"])
+            self.opt_dispensa.set(nomi[0] if nomi else "Nessuna dispensa")
+        except Exception:
+            self.opt_dispensa.configure(values=[""])
+
+    def _id_lezione_corrente(self) -> str:
+        return getattr(self, "_dispense", {}).get(
+            self.opt_dispensa.get(), "L1")
+
+    def _coda_ui(self, testo: str):
+        """Callback thread-safe: dal worker al loop Tk (after(0))."""
+        try:
+            self.after(0, lambda: self._set_stato(testo, colore=tema.AVVISO))
+        except Exception:
+            pass
+
+    def _genera_assistito(self):
+        if getattr(self, "_gen_in_corso", False):
+            self._set_stato("Generazione gia' in corso...", colore=tema.AVVISO)
+            return
+        dispensa = self.opt_dispensa.get().strip()
+        if not dispensa or dispensa == "Nessuna dispensa":
+            self._set_stato("Estrai prima le slide di una dispensa.",
+                            colore=tema.ERRORE)
+            return
+        titolo_par = self.campo_titolo.get().strip()
+        if not titolo_par:
+            self._set_stato("Inserisci un titolo per il paragrafo.",
+                            colore=tema.ERRORE)
+            return
+        self._avvia_generazione(dispensa, titolo_par)
+
+    def _avvia_generazione(self, dispensa: str, titolo_par: str):
+        """Lancia il worker AI in un thread: la UI non si blocca mai."""
+        import threading
+
+        from app.core.ai.impostazioni import LeggiChiavi
+        from app.core.ai.providers import costruisci_fornitore
+        from app.core.ai.router import Router as _Router
+
+        radice = self.app.root_progetto
+        letture = LeggiChiavi(radice)
+        if not letture.consenso_cloud():
+            self._set_stato(
+                "Servono chiavi API nel file .env e il consenso cloud in "
+                "libri/_ai_config.json (privacy.consenso_cloud=true), oppure "
+                "Ollama locale.", colore=tema.ERRORE)
+            return
+        router = _Router(path_stato=radice / "libri" / "_ai_quota.json")
+        fornitore = costruisci_fornitore(radice)
+        pattern = PATTERN_ESERCIZI.format(
+            teoria_origine=self.opt_teoria_origine.get()) \
+            if self._var_esercizi.get() else PATTERN_PARAGRAFO
+
+        self._gen_in_corso = True
+        self.btn_genera.configure(state="disabled")
+        self._set_stato("Generazione AI avviata (puoi chiudere la schermata: "
+                        "il risultato arriva come bozza da validare)...",
+                        colore=tema.AVVISO)
+        id_lezione = self._id_lezione_corrente()
+
+        def worker():
+            from app.core.ai.pipeline import genera_paragrafo_assistito
+            from app.core.ai.contesto import (carica_schede,
+                                              blocchi_per_writer,
+                                              schede_pertinenti)
+            from app.core.ai.tokeni import assembla_contesto
+            esiti = {}
+            try:
+                libro_dir = radice / "libri" / self.slug
+                # 1) schedatura slide automatica se manca (costo zero in cache)
+                from app.core.ai.analisi import analizza_slides
+                if not (carica_schede(libro_dir) or {}).get(id_lezione):
+                    analizza_slides(router=router, provider=fornitore.chiama,
+                                    libro_dir=libro_dir, dispensa=dispensa,
+                                    id_lezione=id_lezione)
+                schede = carica_schede(libro_dir) or {}
+                elenco = schede.get(id_lezione) or []
+                # 2) contesto ampio a budget: solo le slide pertinenti
+                parole = [titolo_par] + titolo_par.split()
+                pertinenti = schede_pertinenti(schede, parole, max_schede=8) \
+                    or elenco[:8]
+                blocchi_ctx = blocchi_per_writer(
+                    {"soggetto": self.slug, "dominio": ""},
+                    f"Capitolo {self.cap}", titolo_par, pertinenti, [],
+                    None, 24_000)
+                selezionati, _usati = assembla_contesto(blocchi_ctx, 24_000)
+                testi = [b.testo for b in selezionati if b.testo.strip()]
+                # 3) draft -> valida -> auto-ripara -> escalation
+                esito = genera_paragrafo_assistito(
+                    router=router, provider=fornitore.chiama,
+                    contesto_blocchi=testi, pattern_completo=pattern,
+                    titolo_paragrafo=titolo_par,
+                    valida_fn=lambda c: valida_contenuto(
+                        c, root=radice, slug=self.slug, cap=self.cap))
+                esiti["esito"] = esito
+            except Exception as e:
+                esiti["eccezione"] = f"{type(e).__name__}: {e}"
+            self.after(0, lambda: self._fine_generazione(esiti))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _fine_generazione(self, esiti: dict):
+        self._gen_in_corso = False
+        self.btn_genera.configure(state="normal")
+        if "eccezione" in esiti:
+            self._set_stato(f"Errore AI: {esiti['eccezione']}",
+                            colore=tema.ERRORE)
+            return
+        esito = esiti.get("esito")
+        if esito is None:
+            self._set_stato("Generazione non riuscita.", colore=tema.ERRORE)
+            return
+        if not esito.ok:
+            self._set_stato(
+                f"Bozza scartata dalla validazione: {esito.errore} "
+                f"(tentativi: {esito.tentativi})", colore=tema.ERRORE)
+            return
+        # La bozza va nell'editor: l'umano rivede, poi Valida e Salva.
+        self.txt_codice.delete("1.0", "end")
+        self.txt_codice.insert("1.0", esito.contenuto or "")
+        self._contenuto_validato = None
+        self._aggiorna_stato_pulsanti_salva()
+        self._set_stato(
+            f"Bozza generata con {esito.modello_finale} "
+            f"({esito.token_totali:,} token, {len(esito.cambi_modello)} "
+            f"scelte). Valida e salva per approvarla.",
+            colore=tema.SUCCESSO)
 
     def _on_contenuto_cambia(self):
         self._contenuto_validato = None

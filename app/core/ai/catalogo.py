@@ -179,6 +179,16 @@ def modelli_per_classe(classe: str) -> list[Modello]:
     return [m for m in MODELLI if classe in m.classi]
 
 
+# ----------------------------------------------------------------------
+# Preferenze di affinita' per la scelta strategica (scelta.py).
+# Un solo posto dove dichiarare "chi e' il migliore per cosa": se un
+# provider cambia listino basta aggiornare queste tre costanti.
+# ----------------------------------------------------------------------
+MODELLO_VISIONE_PREFERITO = "gemini/gemini-2.5-flash"        # slide dense
+MODELLO_RAGIONAMENTO_PREFERITO = "deepseek/deepseek-chat"    # scalette capitoli
+MODELLO_SCRITTURA_PREFERITO = "groq/llama-3.3-70b-versatile"  # draft paragrafi
+
+
 def trova_modello(chiave: str) -> Modello | None:
     for m in MODELLI:
         if m.id == chiave:
