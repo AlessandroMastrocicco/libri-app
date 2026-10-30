@@ -282,8 +282,15 @@ class SchermataCreaParagrafo(ctk.CTkFrame):
         self.btn_anteprima = bottone_secondario(footer, "  Salva e anteprima", command=self._salva_e_anteprima, width=200, state="disabled")
         self.btn_anteprima.grid(row=0, column=3, sticky="e", padx=(8, 0))
 
+        # Rigenera con AI: disponibile solo in modifica (serve il testo attuale)
+        self.btn_rigenera = bottone_secondario(
+            footer, "  Rigenera paragrafo", command=self._apri_rigenera,
+            width=190, state=("normal" if getattr(self, "_modifica", False)
+                              else "disabled"))
+        self.btn_rigenera.grid(row=0, column=4, sticky="e", padx=(8, 0))
+
         self.btn_salva = bottone_primario(footer, "  Salva paragrafo", command=self._salva, width=200, state="disabled")
-        self.btn_salva.grid(row=0, column=4, sticky="e", padx=(8, 0))
+        self.btn_salva.grid(row=0, column=5, sticky="e", padx=(8, 0))
 
     def _inizializza(self):
         par_ids = elenca_paragrafi(self.app.root_progetto, self.slug, self.cap)
@@ -511,6 +518,91 @@ class SchermataCreaParagrafo(ctk.CTkFrame):
             self.after(0, lambda: self._fine_generazione(esiti))
 
         threading.Thread(target=worker, daemon=True).start()
+
+    def _apri_rigenera(self):
+        """Bottone 'Rigenera paragrafo': apre il popup delle istruzioni.
+
+        La rigenerazione ricostruisce i messaggi con: fonti (slide coinvolte,
+        recuperate dai riferimenti Lx_Syyy del codice + cache schede), la
+        versione attuale del paragrafo, le linee guida (guida autore +
+        manuale) e le indicazioni scritte dall'utente nel popup.
+        """
+        if getattr(self, "_rig_in_corso", False):
+            self._set_stato("Rigenerazione gia' in corso...", tema.AVVISO)
+            return
+        contenuto_attuale = self.txt_codice.get("1.0", "end").rstrip("\n")
+        if not contenuto_attuale.strip():
+            self._set_stato("Il paragrafo e' vuoto: niente da rigenerare.",
+                            colore=tema.ERRORE)
+            return
+        dispensa = self.opt_dispensa.get().strip()
+        if not dispensa or dispensa == "Nessuna dispensa":
+            dispensa = None  # deduzione dalle cartelle slide_estratte
+        titolo_par = (self.campo_titolo.get().strip()
+                      or titolo_da_sorgente(contenuto_attuale,
+                                            fallback=f"{self.cap}.{self.par_esistente}"))
+
+        from app.screens.popup_rigenera import PopupRigeneraParagrafo
+        PopupRigeneraParagrafo(
+            self, titolo_par=titolo_par,
+            avvia=lambda istr, cb: self._avvia_rigenera(
+                istr, contenuto_attuale, dispensa, cb),
+            on_fine=self._fine_rigenera)
+
+    def _avvia_rigenera(self, istruzioni: str, contenuto_attuale: str,
+                        dispensa: str | None, cb):
+        """Esegue rigenera.rigenera_paragrafo nel thread gia' avviato dal
+        popup; consegna l'esito al callback `cb` (che fa after UI)."""
+        from app.core.ai.impostazioni import LeggiChiavi
+        from app.core.ai.providers import costruisci_fornitore
+        from app.core.ai.rigenera import rigenera_paragrafo
+        from app.core.ai.router import Router as _Router
+
+        radice = self.app.root_progetto
+        letture = LeggiChiavi(radice)
+        if not letture.consenso_cloud():
+            cb(None, ["Servono chiavi API nel file .env e il consenso cloud "
+                      "in libri/_ai_config.json (privacy.consenso_cloud=true), "
+                      "oppure Ollama locale."])
+            return
+        router = _Router(path_stato=radice / "libri" / "_ai_quota.json")
+        fornitore = costruisci_fornitore(radice)
+        pattern = PATTERN_ESERCIZI.format(
+            teoria_origine=self.opt_teoria_origine.get()) \
+            if self._var_esercizi.get() else PATTERN_PARAGRAFO
+
+        self._rig_in_corso = True
+        esito, note = rigenera_paragrafo(
+            router=router, provider=fornitore.chiama, root=radice,
+            slug=self.slug, cap=self.cap, par_id=self.par_esistente,
+            contenuto=contenuto_attuale, istruzioni_utente=istruzioni,
+            pattern_completo=pattern, dispensa_hint=dispensa,
+            valida_fn=lambda c: valida_contenuto(
+                c, root=radice, slug=self.slug, cap=self.cap))
+        self.after(0, lambda: setattr(self, "_rig_in_corso", False))
+        cb(esito, note)
+
+    def _fine_rigenera(self, esito, note: list[str]):
+        """Applica il risultato rigenerato all'editor (come bozza da
+        ri-validare/salvare: mai scrittura diretta su file)."""
+        for n in note or []:
+            print(f"[rigenera] {n}")
+        if esito is None or not esito.ok:
+            msg = (note[0] if note and esito is None
+                   else getattr(esito, "errore", "esito assente"))
+            self._set_stato(f"Rigenerazione fallita: {msg}", colore=tema.ERRORE)
+            return
+        self.txt_codice.delete("1.0", "end")
+        self.txt_codice.insert("1.0", esito.contenuto or "")
+        self._contenuto_validato = None
+        self._aggiorna_stato_pulsanti_salva()
+        self._aggiorna_anteprima()
+        extra = f" Note: {'; '.join(note)}." if note else ""
+        self._set_stato(
+            f"Paragrafo rigenerato con {esito.modello_finale} "
+            f"({esito.token_totali:,} token, {len(esito.cambi_modello)} "
+            f"scelte di modello). Valida e salva per confermare.{extra}",
+            colore=tema.SUCCESSO)
 
     def _fine_generazione(self, esiti: dict):
         self._gen_in_corso = False

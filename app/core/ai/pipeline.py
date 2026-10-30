@@ -82,15 +82,21 @@ def genera_paragrafo_assistito(
     pattern_completo: str, titolo_paragrafo: str,
     valida_fn: Callable[[str], dict],
     budget_contesto_tok: int = 24_000,
+    istruzione_task: str | None = None,
 ) -> EsitoTask:
     """Pipeline completa per UN paragrafo. Restituisce EsitoTask; il chiamante
-    UI decide commit/bozza. Nessun file toccato qui."""
+    UI decide commit/bozza. Nessun file toccato qui.
+
+    `istruzione_task` opzionale: consente task diversi dal "scrivi da zero"
+    (es. rigenerazione guidata con istruzioni dell'utente, vedi rigenera.py)
+    riusando lo stesso ciclo draft->valida->auto-ripara->escalation."""
     esito = EsitoTask(ok=False)
     # primo draft: guida autore + manuale tecnico (regole intere, cache-friendly)
     statico = statico_per_scrittura(pattern_completo)
+    messaggio_task = (istruzione_task or vincoli_operativi(titolo_paragrafo)) \
+        + "\n" + ISTRUZIONE_SOLO_CORPO
     messaggi, _cache_key = costruisci_messaggi(
-        statico, contesto_blocchi,
-        vincoli_operativi(titolo_paragrafo) + "\n" + ISTRUZIONE_SOLO_CORPO)
+        statico, contesto_blocchi, messaggio_task)
 
     classe_corrente = SCRITTURA
     esclusi: list[str] = []
