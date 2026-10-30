@@ -3,8 +3,8 @@
 main.py - Entry point dell'applicazione LIBRI.
 
 Uso:
-    python main.py                    # da sorgente
-    LIBRI.exe                         # da bundle PyInstaller
+    python main.py                    # da sorgente (unica modalita' prevista:
+                                      # gli utenti scaricano lo ZIP del codice)
 
 Comportamento dei percorsi:
 

@@ -1,5 +1,5 @@
 {
   "version": "0.5.0",
   "url": "https://github.com/AlessandroMastrocicco/libri-app/releases",
-  "changelog": "• Nuova infrastruttura AI per la generazione automatica dei paragrafi: router multi-modello gratuito con switch automatico a quota esaurita.\n• Algoritmi di ottimizzazione token, contesto ampio e scelta strategica del modello (visione per slide, writer leggero per testi).\n• Modalità manuale e automatizzata affiancate; bozza piano capitolo con stima costi e fattibilità quote.\n• Build automatica Windows (.exe) via GitHub Actions al tag v0.5.0."
+  "changelog": "• Nuova infrastruttura AI per la generazione automatica dei paragrafi: router multi-modello gratuito con switch automatico a quota esaurita.\n• Algoritmi di ottimizzazione token, contesto ampio e scelta strategica del modello (visione per slide, writer leggero per testi).\n• Modalità manuale e automatizzata affiancate; bozza piano capitolo con stima costi e fattibilità quote.\n• Distribuzione semplificata: solo ZIP del codice + guida PDF all'installazione per Windows/macOS/Linux (eliminati .exe e installer)."
 }

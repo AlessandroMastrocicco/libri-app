@@ -1,14 +1,12 @@
-# release.yml - Build Windows dell'app LIBRI e pubblicazione della Release.
+# release.yml - Pubblicazione Release di LIBRI (solo ZIP del codice).
 #
 # Responsabilita' minime:
-#   1. costruire l'exe con PyInstaller (libri.spec);
-#   2. impacchettare il bundle in uno ZIP portable;
-#   3. compilare l'installer Inno Setup (LIBRI-Setup-<versione>.exe);
-#   4. creare la Release GitHub con allegati .exe + .zip, al push del tag v*.
-#
-# Permessi usati: contents: write (basta il GITHUB_TOKEN predefinito).
+#   1. creare la Release GitHub al push di un tag v*;
+#   2. allegare la guida PDF all'installazione (docs/GUIDA_INSTALLAZIONE.pdf).
+# Gli utenti scaricano 'Source code (zip)' generato automaticamente da GitHub:
+# non vengono piu' costruiti eseguibili .exe ne' installer.
 
-name: Pubblica release Windows
+name: Pubblica release
 
 on:
   push:
@@ -19,46 +17,16 @@ permissions:
   contents: write
 
 jobs:
-  build-windows:
-    runs-on: windows-latest
-    env:
-      APP_VERSION: ${{ github.ref_name }}   # es. v0.5.0
-
+  release:
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout del tag
         uses: actions/checkout@v4
 
-      - name: Installa Python 3.12
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Installa dipendenze + PyInstaller
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pyinstaller
-
-      - name: Build exe (PyInstaller)
-        run: pyinstaller libri.spec --noconfirm
-
-      - name: Verifica che LIBRI.exe esista
-        run: Test-Path dist\LIBRI\LIBRI.exe
-
-      - name: ZIP portable (bundle senza installer)
-        run: Compress-Archive -Path dist\LIBRI\* -DestinationPath LIBRI-${{ env.APP_VERSION }}-portable.zip
-
-      - name: Compila installer Inno Setup
-        uses: jrsoftware/setup-inno-setup@v1
-        with:
-          path: installer\LIBRI.iss
-          output: dist\LIBRI-Setup-${{ env.APP_VERSION }}.exe
-
-      - name: Crea Release con allegati .exe e .zip
+      - name: Crea Release con guida e sorgenti
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
           generate_release_notes: true
           files: |
-            dist/LIBRI-Setup-${{ env.APP_VERSION }}.exe
-            LIBRI-${{ env.APP_VERSION }}-portable.zip
+            docs/GUIDA_INSTALLAZIONE.pdf

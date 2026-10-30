@@ -1,28 +1,30 @@
 # LIBRI
 
-Applicazione desktop per creare, organizzare e consultare libri e materiali di studio.
+Applicazione desktop (Python + CustomTkinter) per creare, organizzare e
+consultare libri universitari a partire dalle slide dei docenti.
 
-## Avvio da sorgente
+## Installazione
 
-Requisiti: Python e Windows.
+La distribuzione avviene **solo tramite ZIP del codice sorgente**: niente
+eseguibili `.exe` o installer. Per i passaggi completi per Windows, macOS e
+Linux consulta [`docs/GUIDA_INSTALLAZIONE.pdf`](docs/GUIDA_INSTALLAZIONE.pdf),
+allegato a ogni release su GitHub. In sintesi:
 
-```powershell
+1. scarica **Source code (zip)** dalla [release più recente](https://github.com/AlessandroMastrocicco/libri-app/releases/latest) ed estrailo;
+2. crea un ambiente virtuale Python (>= 3.11) nella cartella estratta;
+3. installa le dipendenze e avvia:
+
+```bash
 python -m venv .venv
-.\.venv\Scripts\Activate.ps1
+source .venv/bin/activate        # Windows: .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
 python main.py
 ```
 
-## Installazione Windows
-
-Scarica `LIBRI-Setup-0.4.2.exe` dalla [release più recente](https://github.com/AlessandroMastrocicco/libri-app/releases/latest)
-ed eseguilo. L'installer aggiunge LIBRI al menu Start e, se selezionato,
-al desktop; i collegamenti mostrano il nome e l'icona dell'app, senza
-l'estensione `.exe`.
-
 LIBRI controlla all'avvio se GitHub segnala una versione più recente. Il
 controllo richiede una connessione Internet; se non è disponibile, l'app
-continua ad avviarsi normalmente.
+continua ad avviarsi normalmente. Per aggiornare basta scaricare e estrarre
+il nuovo ZIP sulla stessa cartella (i tuoi libri non vengono toccati).
 
 Il tour guidato attraversa le schermate dell'app usando un libro
 dimostrativo temporaneo, senza modificare i dati personali. Si apre al centro
