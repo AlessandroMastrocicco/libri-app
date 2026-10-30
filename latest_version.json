@@ -1,5 +1,5 @@
 {
-  "version": "0.4.2",
+  "version": "0.5.0",
   "url": "https://github.com/AlessandroMastrocicco/libri-app/releases",
-  "changelog": "• Ampliato il supporto ai simboli matematici e logici con il font Unicode Noto Sans Math incluso nell'app.\n• Aggiunto fallback automatico per operatori, frecce, relazioni, simboli greci e alfabeti matematici Unicode.\n• Migliorata la resa dei confronti < e delle entità nei testi dei paragrafi."
+  "changelog": "• Nuova infrastruttura AI per la generazione automatica dei paragrafi: router multi-modello gratuito con switch automatico a quota esaurita.\n• Algoritmi di ottimizzazione token, contesto ampio e scelta strategica del modello (visione per slide, writer leggero per testi).\n• Modalità manuale e automatizzata affiancate; bozza piano capitolo con stima costi e fattibilità quote.\n• Build automatica Windows (.exe) via GitHub Actions al tag v0.5.0."
 }

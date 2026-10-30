@@ -44,9 +44,33 @@ simboli matematici e logici Unicode, compresi operatori, frecce, relazioni e
 alfabeti matematici. Il font è distribuito secondo la licenza SIL Open Font
 License 1.1, inclusa in `assets/fonts/OFL-NotoSansMath.txt`.
 
+## Generazione assistita con AI (modalità automatica)
+
+Oltre alla modalità manuale (incolla il codice del paragrafo), l'app offre una
+**modalità automatica**: dalla schermata «Crea paragrafo» basta spuntare
+*«Genera automaticamente con l'AI»* e premere «Genera». L'app analizza le slide
+estratte, assembla il contesto pertinente e produce il codice del paragrafo come
+**bozza da validare** (l'output non viene mai committato senza approvazione).
+
+Configurazione minima:
+
+1. copia `.env.example` in `.env` e inserisci la chiave di almeno un provider
+   gratuito (Groq, Gemini, OpenRouter, Cerebras, Mistral, SambaNova, GitHub,
+   DeepSeek); in alternativa installa [Ollama](https://ollama.com) per il
+   fallback locale gratuito e illimitato;
+2. all'avvio l'infrastruttura (`app/core/ai/`) ruota automaticamente tra i
+   modelli disponibili: quando un modello esaurisce la quota giornaliera il
+   router passa al successivo, con escalation ai modelli più potenti per i
+   task complessi (analisi slide) e modelli leggeri per la scrittura.
+
+Nota: richiavi nel file `.env` restano locali ed escluse dal repository.
+
 ## Struttura
 
 - `app/`: interfaccia e logica dell'applicazione.
+  - `app/core/ai/`: infrastruttura AI (catalogo modelli, router quote,
+    ottimizzazione token, contesto ampio, scelta strategica, orchestratore).
+  - `app/core/ai/providers/`: adapter di trasporto (OpenAI-compat, Gemini, Ollama).
 - `motore/`: componenti per la generazione e il rendering dei contenuti.
 - `main.py`: punto di ingresso.
 
