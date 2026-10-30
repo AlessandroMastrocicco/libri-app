@@ -268,20 +268,67 @@ def estrai_scaletta(*, root: Path, slug: str, dispensa: str,
                     id_lezione: str | None = None,
                     router: Router | None = None, provider=None,
                     forza_ai: bool = False,
+                    trascrivi_prima: bool = False,
                     modello_fissato: str | None = None) -> Scaletta:
     """Scalietta del capitolo partendo dalle slide della dispensa.
 
-    Strategia a costo crescente (documentata in docs/BOZZA_SISTEMA_AI.md):
+    Con `trascrivi_prima=True` esegue prima la FASE 1 del flusso "Genera
+    scaletta capitolo": trascrizione slide-per-slide nel DB locale
+    (trascrizione.py, modello vision PESANTE, cache fingerprint => ogni
+    slide analizzata una volta sola) e partizione in paragrafi sul testo
+    gia' pagato, a costo immagini zero.
+
+    Altrimenti, strategia a costo crescente (docs/BOZZA_SISTEMA_AI.md):
       cache schede (0 tok) -> testo PDF locale (0 tok) -> visione AI
-      (se `provider` e nessuna scheda) -> ragionamento AI per i titoli
-      (solo se `router`+`provider` forniti).
+      (se `provider` e nessuna scheda) -> ragionamento AI per i titoli.
     Nessun file di capitolo viene toccato: si scrive solo la cache
-    `_ai_scaletta_<dispensa>.json` accanto alle schede.
+    `_ai_scaletta_<dispensa>.json` accanto alle schede (e il DB slide).
     """
     libro_dir = Path(root) / "libri" / slug
     cartella = libro_dir / "slide_estratte"
     if id_lezione is None:
         id_lezione = _id_lezione_da_dispensa(cartella, dispensa)
+
+    # --- FASE 1 dedicata: trascrizione DB -> partizione su testo -------
+    if trascrivi_prima and router is not None and provider is not None:
+        from app.core.ai.trascrizione import (DbSlide, schede_per_partizione,
+                                              trascrivi_dispensa)
+        png = _png_dispensa(cartella, dispensa)
+        note_tr: list[str] = []
+        if png:
+            es = trascrivi_dispensa(router=router, provider=provider,
+                                    libro_dir=libro_dir, dispensa=dispensa,
+                                    png=png, modello_fissato=modello_fissato)
+            note_tr.extend(es.errori)
+            with DbSlide(cartella) as db:
+                trascrizioni = db.leggi(dispensa)
+            if trascrizioni:
+                schede_db = schede_per_partizione(trascrizioni, id_lezione)
+                scaletta = scaletta_locale(schede_db, dispensa=dispensa,
+                                           id_lezione=id_lezione,
+                                           fonte="db-trascrizione")
+                scaletta.token_spesi = es.token_spesi
+                if es.modelli_usati:
+                    scaletta.modello_usato = es.modelli_usati[-1]
+                scaletta.note.extend(note_tr or [
+                    f"{es.nuove} slide trascritte ex-novo, "
+                    f"{es.in_cache} riusate dal DB (costo 0)."])
+                if router is not None:
+                    scaletta = raffinamento_con_ai(
+                        router=router, provider=provider, scaletta=scaletta,
+                        modello_fissato=modello_fissato)
+                salva_scaletta(cartella, scaletta)
+                return scaletta
+            note_tr.append("DB trascrizioni vuoto dopo la fase 1: "
+                           "provo con le vie economiche.")
+        else:
+            note_tr.append("Nessuna PNG trovata per la dispensa.")
+        # fallback: prosegui con la strategia classica
+        scaletta = Scaletta(dispensa=dispensa, id_lezione=id_lezione,
+                            fonte="vuoto")
+        scaletta.note.extend(note_tr)
+        salvata = leggi_scaletta(cartella, dispensa)
+        return salvata if (salvata and not forza_ai) else scaletta
 
     # --- 1. cache: costo zero garantito --------------------------------
     schede = schede_esistenti(libro_dir, id_lezione)
@@ -335,9 +382,20 @@ def estrai_scaletta(*, root: Path, slug: str, dispensa: str,
 # ----------------------------------------------------------------------
 
 def _slug_nome(nome: str) -> str:
-    s = re.sub(r"[^a-z0-9]+", "-", (nome or "").lower()).strip("-")
-    return s or "dispensa"
+    """Slug identico a slide_extract._slug (usato per le cartelle dispensa)."""
+    from app.core.slide_extract import _slug
+    return _slug(nome)
 
+
+def _png_dispensa(cartella_slide: Path, dispensa: str) -> list[Path]:
+    """Tutte le PNG estratte di una dispensa, ordinate per numero."""
+    def _num(p: Path) -> int:
+        cifre = re.sub(r"\D", "", p.name)
+        return int(cifre) if cifre else 0
+    cart = Path(cartella_slide) / _slug_nome(dispensa)
+    pngs = sorted(set(list(cart.glob("pagina_*.png"))
+                      + list(cart.glob("*S[0-9][0-9][0-9]*.png"))), key=_num)
+    return [p for p in pngs if p.is_file()]
 
 def path_scaletta(cartella_slide: Path, dispensa: str) -> Path:
     return cartella_slide / f"_ai_scaletta_{_slug_nome(dispensa)}.json"

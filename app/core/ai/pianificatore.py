@@ -39,7 +39,10 @@ _SLIDE_PER_PARAGRAFO = 6      # densita' obiettivo: ~6 slide per paragrafo
 
 
 def _token_testo(scheda: dict) -> set[str]:
-    blob = json.dumps(scheda, ensure_ascii=False).lower()
+    blob = (str(scheda.get("_corpo") or "") + " "
+            + json.dumps({k: v for k, v in scheda.items()
+                          if k not in ("_corpo", "file")},
+                         ensure_ascii=False).lower())
     return {w for w in re.findall(r"[a-zàèéìòù_]{4,}", blob)}
 
 

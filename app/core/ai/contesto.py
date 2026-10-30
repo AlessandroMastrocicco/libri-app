@@ -42,13 +42,45 @@ def carica_schede(libro_dir: Path) -> dict | None:
 
 
 def salva_schede(libro_dir: Path, schede: dict) -> None:
-    """schede: {id_lezione: [{slide, titolo, punti: [..], figure: [..]}]}"""
+    """schede: {id_lezione: [{slide, titolo, punti: [..], figure: [..]}]}
+
+    Dopo la scrittura della cache JSON sincronizza anche il DB slide
+    (trascrizione.py), cosi' il testo delle trascrizioni AI e' consultabile
+    in SQL e le due rappresentazioni restano allineate. Costo: 0 token.
+    """
     p = path_cache_schede(libro_dir)
     p.parent.mkdir(parents=True, exist_ok=True)
     tmp = p.with_suffix(".tmp")
     tmp.write_text(json.dumps(schede, ensure_ascii=False, indent=1),
                    encoding="utf-8")
     tmp.replace(p)
+    try:                                   # best-effort, mai bloccante
+        from app.core.ai.trascrizione import DbSlide
+        dispensa = str(schede.get("_dispensa") or "L1")
+        with DbSlide(p.parent) as db:
+            for id_lez, elenco in schede.items():
+                if id_lez.startswith("_") or not isinstance(elenco, list):
+                    continue
+                for s in elenco:
+                    if not isinstance(s, dict) or not s.get("slide"):
+                        continue
+                    figure = [{"tipo": str(f)[:40], "posizione": "",
+                               "descrizione": str(f)}
+                              for f in (s.get("figure") or [])
+                              if isinstance(f, str)]
+                    db.salva_scheda(dispensa, {
+                        "slide": s.get("slide"), "titolo": s.get("titolo"),
+                        "testo": "\n".join(str(p_) for p_ in
+                                           (s.get("punti") or [])),
+                        "concetti": s.get("punti") or [],
+                        "dubbi": s.get("dubbi") or [],
+                        "centralita": s.get("centralita"),
+                        "figure": figure},
+                        file=str(s.get("file") or ""), fp="",
+                        modello=str(s.get("modello") or "cache-json"),
+                        token=int(s.get("token") or 0))
+    except Exception:
+        pass
 
 
 def schede_pertinenti(schede: dict, parole_chiave: list[str],
