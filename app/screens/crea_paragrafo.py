@@ -282,11 +282,11 @@ class SchermataCreaParagrafo(ctk.CTkFrame):
         self.btn_anteprima = bottone_secondario(footer, "  Salva e anteprima", command=self._salva_e_anteprima, width=200, state="disabled")
         self.btn_anteprima.grid(row=0, column=3, sticky="e", padx=(8, 0))
 
-        # Rigenera con AI: disponibile solo in modifica (serve il testo attuale)
+        # Rigenera con AI: disponibile appena c'e' del codice nell'editor
+        # (in creazione la validita' dipende da cio' che e' stato incollato).
         self.btn_rigenera = bottone_secondario(
             footer, "  Rigenera paragrafo", command=self._apri_rigenera,
-            width=190, state=("normal" if getattr(self, "_modifica", False)
-                              else "disabled"))
+            width=190, state="normal")
         self.btn_rigenera.grid(row=0, column=4, sticky="e", padx=(8, 0))
 
         self.btn_salva = bottone_primario(footer, "  Salva paragrafo", command=self._salva, width=200, state="disabled")
@@ -572,9 +572,11 @@ class SchermataCreaParagrafo(ctk.CTkFrame):
             if self._var_esercizi.get() else PATTERN_PARAGRAFO
 
         self._rig_in_corso = True
+        # paragrafo in creazione: id temporaneo (nessun vicino da leggere)
+        pid = self.par_esistente or "0_nuovo"
         esito, note = rigenera_paragrafo(
             router=router, provider=fornitore.chiama, root=radice,
-            slug=self.slug, cap=self.cap, par_id=self.par_esistente,
+            slug=self.slug, cap=self.cap, par_id=pid,
             contenuto=contenuto_attuale, istruzioni_utente=istruzioni,
             pattern_completo=pattern, dispensa_hint=dispensa,
             valida_fn=lambda c: valida_contenuto(

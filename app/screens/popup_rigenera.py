@@ -140,10 +140,17 @@ class PopupRigeneraParagrafo(ctk.CTkToplevel):
                                      text="  Invia al modello")
 
         def worker():
-            # il core fa tutto (fonti+versione+guida+istruzioni+AI);
-            # qui solo marshalling verso il thread UI
+            # il core fa tutto (fonti+versione+guida+istruzioni+AI).
+            # Il callback `cb` viene INVOCATO GIA' SUL THREAD UI dal chiamante
+            # (pattern usato in crea_paragrafo/lettore); se un core passasse
+            # l'esito dal thread di lavoro, `_fine` resta idempotente perche'
+            # configurare widget da altro thread non e' sicuro: normalizziamo.
             def cb(esito, note):
-                self.after(0, lambda: self._fine(esito, note))
+                import threading as _th
+                if _th.current() is _th.main_thread():
+                    self._fine(esito, note)
+                else:
+                    self.after(0, lambda: self._fine(esito, note))
 
             try:
                 self._avvia(istruzioni, cb)
