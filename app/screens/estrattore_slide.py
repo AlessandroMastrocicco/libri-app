@@ -199,6 +199,263 @@ class PopupAnteprima(ctk.CTkToplevel):
 
 
 # ======================================================================
+# Popup scaletta del capitolo (estrazione automatica dalle slide)
+# ======================================================================
+
+class PopupScaletta(ctk.CTkToplevel):
+    """Mostra la scaletta generata (locale o AI) e permette di copiarla,
+    salvarla in .md o rigenerarla con raffinamento AI dei titoli.
+
+    Responsabilita' minima: solo presentazione; la logica vive in
+    app/core/ai/scaletta.py e il worker gira nel thread della schermata.
+    """
+
+    def __init__(self, parent, dispensa: str, on_rigenera=None):
+        super().__init__(parent)
+        self.title(f"Scaletta — {dispensa}")
+        self.configure(fg_color=tema.BG_APP)
+        self.geometry("720x560")
+        try:
+            self.transient(parent)
+        except Exception:
+            pass
+
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(1, weight=1)
+
+        self.lbl_stato = ctk.CTkLabel(
+            self, text="Estrazione scaletta in corso...", anchor="w",
+            font=ctk.CTkFont(size=12), text_color=tema.TESTO_TENUE,
+            wraplength=680, justify="left")
+        self.lbl_stato.grid(row=0, column=0, sticky="ew",
+                            padx=16, pady=(12, 4))
+
+        self.txt = ctk.CTkTextbox(self, wrap="word",
+                                  fg_color=tema.BG_INPUT,
+                                  text_color=tema.TESTO,
+                                  font=ctk.CTkFont(size=13))
+        self.txt.grid(row=1, column=0, sticky="nsew", padx=16, pady=4)
+        self.txt.insert("1.0", "(attendi: sto leggendo le slide...)")
+        self.txt.configure(state="disabled")
+
+        pulsanti = ctk.CTkFrame(self, fg_color="transparent")
+        pulsanti.grid(row=2, column=0, pady=(6, 14))
+        self._on_rigenera = on_rigenera
+
+        self.btn_rigenera = ctk.CTkButton(
+            pulsanti, text="  Raffina titoli con AI", width=170, height=34,
+            fg_color=tema.PRIMARIO, hover_color=tema.PRIMARIO_HOVER,
+            command=self._rigenera)
+        self.btn_rigenera.pack(side="left", padx=4)
+
+        ctk.CTkButton(
+            pulsanti, text="  Copia testo", width=120, height=34,
+            fg_color=tema.NEUTRO, hover_color=tema.NEUTRO_HOVER,
+            command=self._copia).pack(side="left", padx=4)
+
+        ctk.CTkButton(
+            pulsanti, text="  Salva .md", width=110, height=34,
+            fg_color=tema.NEUTRO, hover_color=tema.NEUTRO_HOVER,
+            command=lambda: self._salva_md(dispensa)).pack(side="left",
+                                                           padx=4)
+
+        ctk.CTkButton(
+            pulsanti, text="  Chiudi", width=100, height=34,
+            fg_color=tema.NEUTRO, hover_color=tema.NEUTRO_HOVER,
+            command=self.destroy).pack(side="left", padx=(12, 4))
+
+        self._testo_corrente = ""
+        self.after(80, self.lift)
+
+    # -- aggiornamenti dalla schermata (thread UI) --------------------
+    def mostra(self, scaletta) -> None:
+        corpo = scaletta.to_markdown()
+        meta = [f"Fonte: {scaletta.fonte}",
+                f"{len(scaletta.voci)} paragrafi previsti, "
+                f"{scaletta.n_slide} slide coperte"]
+        if scaletta.token_spesi:
+            meta.append(f"{scaletta.token_spesi:,} token spesi "
+                        f"(modello: {scaletta.modello_usato})")
+        else:
+            meta.append("costo 0 token")
+        for n in scaletta.note:
+            meta.append(f"• {n}")
+        self.lbl_stato.configure(text="  ·  ".join(meta))
+        self._testo_corrente = corpo
+        self.txt.configure(state="normal")
+        self.txt.delete("1.0", "end")
+        self.txt.insert("1.0", corpo)
+        self.txt.configure(state="disabled")
+
+    def errore(self, messaggio: str) -> None:
+        self.lbl_stato.configure(text=messaggio, text_color=tema.ERRORE)
+        self.txt.configure(state="normal")
+        self.txt.delete("1.0", "end")
+        self.txt.insert("1.0", "")
+        self.txt.configure(state="disabled")
+
+    # -- azioni --------------------------------------------------------
+    def _rigenera(self):
+        if self._on_rigenera:
+            self.btn_rigenera.configure(state="disabled",
+                                        text="  Raffinamento...")
+            self.lbl_stato.configure(text="Raffinamento titoli AI in corso "
+                                          "(modello leggero di "
+                                          "ragionamento)...")
+            self._on_rigenera()
+            self.after(4000, lambda: self.btn_rigenera.configure(
+                state="normal", text="  Raffina titoli con AI"))
+
+    def _copia(self):
+        try:
+            self.clipboard_clear()
+            self.clipboard_append(self._testo_corrente)
+            self.lbl_stato.configure(text="Scaletta copiata negli appunti.")
+        except Exception as e:
+            messagebox.showerror("Errore", str(e), parent=self)
+
+    def _salva_md(self, dispensa: str):
+        percorso = filedialog.asksaveasfilename(
+            parent=self, title="Salva la scaletta", defaultextension=".md",
+            initialfile=f"scaletta_{dispensa[:40]}.md",
+            filetypes=[("Markdown", "*.md"), ("Testo", "*.txt")])
+        if not percorso:
+            return
+        try:
+            Path(percorso).write_text(self._testo_corrente,
+                                      encoding="utf-8")
+            self.lbl_stato.configure(text=f"Scaletta salvata in {percorso}")
+        except Exception as e:
+            messagebox.showerror("Errore", str(e), parent=self)
+
+
+# ======================================================================
+# Popup "Genera scaletta capitolo" (solo presentazione: la logica vive in
+# app/core/ai/trascrizione.py + app/core/ai/scaletta.py)
+# ======================================================================
+
+class PopupFlussoScaletta(ctk.CTkToplevel):
+    """Finestra del flusso completo: fase 1 (trascrizione slide-per-slide
+    nel DB, modello vision pesante) e fase 2 (partizione in paragrafi sul
+    testo gia' pagato). Mostra lo stato delle due fasi in tempo reale.
+
+    E' il sostituto automatico del "copia le regole e incollale in chat":
+    una volta trascritta, ogni slide non viene MAI piu' rianalizzata.
+    """
+
+    def __init__(self, parent, dispensa: str, on_annulla=None):
+        super().__init__(parent)
+        self.title(f"Genera scaletta — {dispensa}")
+        self.configure(fg_color=tema.BG_APP)
+        self.geometry("640x380")
+        try:
+            self.transient(parent)
+        except Exception:
+            pass
+        self._on_annulla = on_annulla
+        self._annullato = False
+
+        self.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(
+            self, text=f"Flusso scaletta capitolo — {dispensa}",
+            font=ctk.CTkFont(size=15, weight="bold"),
+            text_color=tema.TESTO).grid(row=0, column=0, sticky="w",
+                                        padx=18, pady=(14, 2))
+
+        # --- fase 1 -------------------------------------------------
+        self.lbl_f1 = ctk.CTkLabel(
+            self, anchor="w", justify="left", wraplength=590,
+            font=ctk.CTkFont(size=12), text_color=tema.TESTO_TENUE,
+            text=("Fase 1 · Trascrizione slide per slide (analisi AI con "
+                  "immagine + testo + figure, salvate nel DB)\n"
+                  "     in attesa..."))
+        self.lbl_f1.grid(row=1, column=0, sticky="ew", padx=18, pady=(8, 0))
+
+        self.bar_f1 = ctk.CTkProgressBar(self, width=590)
+        self.bar_f1.grid(row=2, column=0, sticky="w", padx=18, pady=(4, 0))
+        self.bar_f1.set(0)
+
+        # --- fase 2 -------------------------------------------------
+        self.lbl_f2 = ctk.CTkLabel(
+            self, anchor="w", justify="left", wraplength=590,
+            font=ctk.CTkFont(size=12), text_color=tema.TESTO_TENUE,
+            text=("Fase 2 · Suddivisione in paragrafi in base ai contenuti "
+                  "(riusa le trascrizioni: costo immagini 0)\n"
+                  "     in attesa della fase 1..."))
+        self.lbl_f2.grid(row=3, column=0, sticky="ew", padx=18, pady=(10, 0))
+
+        self.txt = ctk.CTkTextbox(self, wrap="word", height=90,
+                                  fg_color=tema.BG_INPUT,
+                                  text_color=tema.TESTO_TENUE,
+                                  font=ctk.CTkFont(size=12))
+        self.txt.grid(row=4, column=0, sticky="nsew", padx=18, pady=(8, 4))
+        self.grid_rowconfigure(4, weight=1)
+        self.txt.insert("1.0", "Avvio del flusso...\n")
+        self.txt.configure(state="disabled")
+
+        pulsanti = ctk.CTkFrame(self, fg_color="transparent")
+        pulsanti.grid(row=5, column=0, pady=(4, 14))
+        self.btn_annulla = ctk.CTkButton(
+            pulsanti, text="  Annulla", width=110, height=34,
+            fg_color=tema.DISTRUTTIVO, hover_color=tema.DISTRUTTIVO_HOVER,
+            command=self._annulla)
+        self.btn_annulla.pack(side="left", padx=4)
+        ctk.CTkButton(
+            pulsanti, text="  Chiudi", width=100, height=34,
+            fg_color=tema.NEUTRO, hover_color=tema.NEUTRO_HOVER,
+            command=self.destroy).pack(side="left", padx=(12, 4))
+
+        self.after(80, self.lift)
+
+    # -- aggiornamenti dal worker (via screen.after) -------------------
+    def _scrivi(self, riga: str):
+        self.txt.configure(state="normal")
+        self.txt.insert("end", riga + "\n")
+        self.txt.see("end")
+        self.txt.configure(state="disabled")
+
+    def fase1_in_corso(self, fatto: int, totale: int, tok: int):
+        frac = fatto / max(totale, 1)
+        self.bar_f1.set(frac)
+        self.lbl_f1.configure(
+            text=(f"Fase 1 · Trascrizione slide per slide — "
+                  f"{fatto}/{totale}   ({tok:,} token spesi finora)"))
+        if fatto and (fatto == totale or fatto % 3 == 0):
+            self._scrivi(f"Fase 1: {fatto}/{totale} slide trascritte nel DB.")
+
+    def fase1_finita(self, totali: int, tok: int, note: list[str]):
+        self.bar_f1.set(1)
+        self.lbl_f1.configure(
+            text=f"Fase 1 · completata: {totali} slide nel DB, "
+                 f"{tok:,} token totali")
+        for n in note:
+            self._scrivi(f"• {n}")
+
+    def fase2_in_corso(self):
+        self.lbl_f2.configure(
+            text="Fase 2 · Partizione tematica in corso "
+                 "(algoritmo locale, costo 0)...")
+
+    def errore(self, messaggio: str):
+        self._scrivi(f"ERRORE: {messaggio}")
+        self.lbl_f2.configure(text=messaggio, text_color=tema.ERRORE)
+
+    @property
+    def annullato(self) -> bool:
+        return self._annullato
+
+    def _annulla(self):
+        self._annullato = True
+        self.btn_annulla.configure(state="disabled", text="  Annullamento...")
+        if self._on_annulla:
+            try:
+                self._on_annulla()
+            except Exception:
+                pass
+
+
+# ======================================================================
 # Schermata principale
 # ======================================================================
 
@@ -519,6 +776,27 @@ class SchermataEstrattoreSlide(ctk.CTkFrame):
         )
         self.btn_copia_perc.grid(row=0, column=6, sticky="e", padx=2)
 
+        # Scaletta capitolo: estrazione automatica dalle slide (AI opzionale)
+        self.btn_scaletta = ctk.CTkButton(
+            toolbar, text="Scaletta capitolo", width=150, height=30,
+            fg_color=tema.PRIMARIO, hover_color=tema.PRIMARIO_HOVER,
+            font=ctk.CTkFont(size=12, weight="bold"),
+            command=self._estrai_scaletta,
+            state="disabled",
+        )
+        self.btn_scaletta.grid(row=0, column=7, sticky="e", padx=2)
+
+        # Flusso completo: fase 1 trascrizione DB + fase 2 partizione
+        self.btn_genera_scaletta = ctk.CTkButton(
+            toolbar, text="Genera scaletta capitolo", width=190, height=30,
+            fg_color=tema.PRIMARIO, hover_color=tema.PRIMARIO_HOVER,
+            font=ctk.CTkFont(size=12, weight="bold"),
+            command=self._avvia_flusso_scaletta,
+            state="disabled",
+        )
+        self.btn_genera_scaletta.grid(row=1, column=7, sticky="e",
+                                      padx=2, pady=(6, 0))
+
         self.btn_elimina = ctk.CTkButton(
             toolbar, text="Elimina selezionate",
             width=150, height=30,
@@ -528,7 +806,7 @@ class SchermataEstrattoreSlide(ctk.CTkFrame):
             command=self._elimina_selezionate,
             state="disabled"
         )
-        self.btn_elimina.grid(row=0, column=7, sticky="e", padx=(2, 4))
+        self.btn_elimina.grid(row=0, column=8, sticky="e", padx=(2, 4))
 
     # ------------------------------------------------------------------
     # Azioni
@@ -577,6 +855,8 @@ class SchermataEstrattoreSlide(ctk.CTkFrame):
         self.btn_copia_sel.configure(state="disabled")
         self.btn_copia_perc.configure(state="disabled")
         self.btn_elimina.configure(state="disabled")
+        self.btn_scaletta.configure(state="disabled")
+        self.btn_genera_scaletta.configure(state="disabled")
         
         self.btn_estrai.configure(state="normal")
 
@@ -734,6 +1014,8 @@ class SchermataEstrattoreSlide(ctk.CTkFrame):
         self.btn_copia_sel.configure(state="disabled")
         self.btn_copia_perc.configure(state="disabled")
         self.btn_elimina.configure(state="disabled")
+        self.btn_scaletta.configure(state="disabled")
+        self.btn_genera_scaletta.configure(state="disabled")
         self.btn_estrai.configure(state="disabled")
 
     def _carica_cartella(self, cartella: Path):
@@ -749,6 +1031,8 @@ class SchermataEstrattoreSlide(ctk.CTkFrame):
         self.btn_copia_sel.configure(state="normal")
         self.btn_copia_perc.configure(state="normal")
         self.btn_elimina.configure(state="normal")
+        self.btn_scaletta.configure(state="normal")
+        self.btn_genera_scaletta.configure(state="normal")
         self.btn_estrai.configure(state="disabled")
         
         self.after_idle(self._aggiorna_griglia)
@@ -966,6 +1250,224 @@ class SchermataEstrattoreSlide(ctk.CTkFrame):
             messagebox.showerror("Errori durante l'eliminazione", "\n".join(errori))
         if self._cartella_corrente:
             self._carica_cartella(self._cartella_corrente)
+
+    # ------------------------------------------------------------------
+    # Scaletta capitolo (estrazione automatica dalle slide)
+    # ------------------------------------------------------------------
+
+    def _nome_dispensa_corrente(self) -> str:
+        """Nome leggibile della dispensa dalla cartella di estrazione."""
+        if not self._cartella_corrente:
+            return ""
+        for e in elenca_estratti(self.app.root_progetto, self.slug):
+            if Path(e["cartella"]) == Path(self._cartella_corrente):
+                return e["dispensa"]
+        return self._cartella_corrente.name
+
+    def _estrai_scaletta(self, *, forza_ai: bool = False):
+        """Avvia l'estrazione della scaletta nel thread (UI mai bloccata).
+
+        Strategia a costo crescente definita in app/core/ai/scaletta.py:
+        cache schede -> testo PDF locale -> visione AI -> ragionamento AI
+        per i titoli. Qui solo orchestrazione threading + popup.
+        """
+        if getattr(self, "_scaletta_in_corso", False):
+            self._flash("Scaletta gia' in elaborazione...")
+            return
+        dispensa = self._nome_dispensa_corrente()
+        if not dispensa:
+            messagebox.showwarning("Nessuna dispensa",
+                                   "Seleziona un'estrazione nella colonna "
+                                   "di sinistra.")
+            return
+
+        radice = Path(self.app.root_progetto)
+        router = None
+        fornitore = None
+        try:
+            from app.core.ai.impostazioni import LeggiChiavi
+            from app.core.ai.providers import costruisci_fornitore
+            from app.core.ai.router import Router as _Router
+            letture = LeggiChiavi(radice)
+            if letture.consenso_cloud() or "ollama" in letture.provider_attivabili():
+                router = _Router(path_stato=radice / "libri" / "_ai_quota.json")
+                fornitore = costruisci_fornitore(radice)
+        except Exception:
+            router = fornitore = None   # via gratuita (cache/PDF), poi nota
+
+        pdf = self._pdf_scelto if (self._pdf_scelto
+                                   and dispensa ==
+                                   self.entry_dispensa.get().strip()) else None
+
+        popup = PopupScaletta(
+            self, dispensa, on_rigenera=lambda: self._estrai_scaletta(
+                forza_ai=True))
+        self._popup_scaletta = popup
+        self._scaletta_in_corso = True
+        esiti: dict = {}
+        self._esiti_scaletta = esiti      # il worker scrive qui
+
+        def worker():
+            from app.core.ai.scaletta import estrai_scaletta
+            try:
+                esiti["scaletta"] = estrai_scaletta(
+                    root=radice, slug=self.slug, dispensa=dispensa,
+                    pdf_path=pdf, router=router, provider=(
+                        fornitore.chiama if fornitore else None),
+                    forza_ai=forza_ai)
+            except Exception as e:
+                esiti.clear()
+                esiti["eccezione"] = f"{type(e).__name__}: {e}"
+            self.after(0, lambda: self._mostra_scaletta(esiti))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _mostra_scaletta(self, esiti: dict):
+        self._scaletta_in_corso = False
+        popup = getattr(self, "_popup_scaletta", None)
+        if popup is None or not popup.winfo_exists():
+            return
+        if "eccezione" in esiti:
+            popup.errore(f"Errore: {esiti['eccezione']}")
+            return
+        scaletta = esiti.get("scaletta")
+        if scaletta is None:
+            popup.errore("Elaborazione non riuscita.")
+            return
+        popup.mostra(scaletta)
+
+    # ------------------------------------------------------------------
+    # Flusso "Genera scaletta capitolo" (fase 1 trascrizione DB + fase 2)
+    # ------------------------------------------------------------------
+
+    def _costruisci_router(self):
+        """Router+fornitore AI se c'e' consenso cloud o Ollama attivo.
+
+        Ritorna (router, provider_fn, modello_fissato) oppure None: in tal
+        caso il flusso si ferma con una nota (la fase 1 richiede AI).
+        """
+        radice = Path(self.app.root_progetto)
+        try:
+            from app.core.ai.impostazioni import LeggiChiavi
+            from app.core.ai.providers import costruisci_fornitore
+            from app.core.ai.router import Router as _Router
+            letture = LeggiChiavi(radice)
+            if not (letture.consenso_cloud()
+                    or "ollama" in letture.provider_attivabili()):
+                return None
+            return (_Router(path_stato=radice / "libri" / "_ai_quota.json"),
+                    costruisci_fornitore(radice).chiama,
+                    letture.modello_fissato())
+        except Exception:
+            return None
+
+    def _avvia_flusso_scaletta(self):
+        """Bottone principale: esegue il flusso completo in thread worker.
+
+        Fase 1 (trascrizione slide-per-slide nel DB, modello vision pesante)
+        e fase 2 (partizione in paragrafi riutilizzando il testo gia'
+        pagato) vivono in app/core/ai/trascrizione.py e scaletta.py; qui
+        solo orchestrazione threading + popup di avanzamento.
+        """
+        if getattr(self, "_flusso_in_corso", False):
+            self._flash("Flusso scaletta gia' in elaborazione...")
+            return
+        dispensa = self._nome_dispensa_corrente()
+        if not dispensa:
+            messagebox.showwarning("Nessuna dispensa",
+                                   "Seleziona un'estrazione nella colonna "
+                                   "di sinistra.")
+            return
+        ctx = self._costruisci_router()
+        if ctx is None:
+            messagebox.showwarning(
+                "AI non configurata",
+                "La trascrizione delle slide richiede un modello AI.\n\n"
+                "Configura le chiavi API nel file .env (o avvia Ollama) e "
+                "dai il consenso cloud nelle impostazioni.\n"
+                "In alternativa usa il pulsante 'Scaletta capitolo', che "
+                "funziona anche senza AI (testo del PDF, costo zero).")
+            return
+        router, provider, modello_fissato = ctx
+
+        cartella = Path(self._cartella_corrente) if self._cartella_corrente \
+            else None
+        if not cartella or not list(cartella.glob("*.png")):
+            messagebox.showwarning("Nessuna slide",
+                                   "Estrai prima le pagine della dispensa.")
+            return
+
+        popup = PopupFlussoScaletta(self, dispensa)
+        self._popup_flusso = popup
+        self._flusso_in_corso = True
+        self._flusso_interrotto = False
+        esiti: dict = {"totale": len(list(cartella.glob("*.png")))}
+        self._esiti_flusso = esiti
+
+        def progresso(fatto: int, totale: int, tok: int):
+            self.after(0, lambda: popup.winfo_exists() and
+                       popup.fase1_in_corso(fatto, totale, tok))
+
+        def annullato() -> bool:
+            return self._flusso_interrotto
+
+        def worker():
+            from app.core.ai.scaletta import estrai_scaletta
+            from app.core.ai.trascrizione import trascrivi_dispensa
+            radice = Path(self.app.root_progetto)
+            libro_dir = radice / "libri" / self.slug
+            png = sorted(cartella.glob("*.png"),
+                         key=lambda p: int("".join(
+                             c for c in p.stem if c.isdigit()) or 0))
+            try:
+                es = trascrivi_dispensa(
+                    router=router, provider=provider, libro_dir=libro_dir,
+                    dispensa=dispensa, png=png,
+                    modello_fissato=modello_fissato,
+                    callback_progresso=progresso,
+                    callback_annullato=annullato)
+                esiti["trascrizione"] = es
+                if self._flusso_interrotto:
+                    self.after(0, lambda: popup.winfo_exists() and
+                               popup.errore("Flusso interrotto dall'utente."))
+                    return
+                self.after(0, lambda: popup.winfo_exists() and
+                           popup.fase1_finita(es.nuove + es.in_cache,
+                                              es.token_spesi, es.errori))
+                self.after(0, lambda: popup.winfo_exists() and
+                           popup.fase2_in_corso())
+                esiti["scaletta"] = estrai_scaletta(
+                    root=radice, slug=self.slug, dispensa=dispensa,
+                    router=router, provider=provider,
+                    trascrivi_prima=False)   # DB gia' popolato: fase 2 pura
+            except Exception as e:
+                esiti.clear()
+                esiti["eccezione"] = f"{type(e).__name__}: {e}"
+            self.after(0, lambda: self._fine_flusso(esiti))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _fine_flusso(self, esiti: dict):
+        self._flusso_in_corso = False
+        popup = getattr(self, "_popup_flusso", None)
+        if popup is not None and popup.winfo_exists():
+            if "eccezione" in esiti:
+                popup.errore(esiti["eccezione"])
+            elif esiti.get("scaletta") is not None:
+                popup.errore("")      # pulisce stato errore
+                popup.destroy()
+        scaletta = esiti.get("scaletta")
+        if scaletta is not None:
+            self._mostra_popup_scaletta_finale(scaletta)
+
+    def _mostra_popup_scaletta_finale(self, scaletta):
+        """Mostra il risultato del flusso nel popup scaletta esistente."""
+        popup = PopupScaletta(getattr(self, "_popup_flusso", self) or self,
+                              scaletta.dispensa,
+                              on_rigenera=lambda: self._estrai_scaletta(
+                                  forza_ai=True))
+        popup.mostra(scaletta)
+        self._popup_scaletta = popup
 
     # ------------------------------------------------------------------
     # Utility

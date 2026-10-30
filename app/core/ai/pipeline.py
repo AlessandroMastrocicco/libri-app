@@ -22,7 +22,9 @@ from typing import Callable
 from app.core.ai.catalogo import (Modello, SCRITTURA, RAGIONAMENTO, LOCAL,
                                   ESCALATION)
 from app.core.ai.prompt import (pattern_compresso, costruisci_messaggi,
-                                innesta_boilerplate, ISTRUZIONE_SOLO_CORPO)
+                                innesta_boilerplate, ISTRUZIONE_SOLO_CORPO,
+                                statico_per_scrittura)
+from app.core.ai.guida_autore import vincoli_operativi
 from app.core.ai.router import (Router, OK, QUOTA_ESAURITA, ERRORE_RETE,
                                 QuotaEsauritaException)
 from app.core.ai.tokeni import stima_token
@@ -80,14 +82,21 @@ def genera_paragrafo_assistito(
     pattern_completo: str, titolo_paragrafo: str,
     valida_fn: Callable[[str], dict],
     budget_contesto_tok: int = 24_000,
+    istruzione_task: str | None = None,
 ) -> EsitoTask:
     """Pipeline completa per UN paragrafo. Restituisce EsitoTask; il chiamante
-    UI decide commit/bozza. Nessun file toccato qui."""
+    UI decide commit/bozza. Nessun file toccato qui.
+
+    `istruzione_task` opzionale: consente task diversi dal "scrivi da zero"
+    (es. rigenerazione guidata con istruzioni dell'utente, vedi rigenera.py)
+    riusando lo stesso ciclo draft->valida->auto-ripara->escalation."""
     esito = EsitoTask(ok=False)
-    statico = pattern_completo  # primo draft: regole intere, cache-friendly
+    # primo draft: guida autore + manuale tecnico (regole intere, cache-friendly)
+    statico = statico_per_scrittura(pattern_completo)
+    messaggio_task = (istruzione_task or vincoli_operativi(titolo_paragrafo)) \
+        + "\n" + ISTRUZIONE_SOLO_CORPO
     messaggi, _cache_key = costruisci_messaggi(
-        statico, contesto_blocchi,
-        f"Scrivi il paragrafo '{titolo_paragrafo}'.\n{ISTRUZIONE_SOLO_CORPO}")
+        statico, contesto_blocchi, messaggio_task)
 
     classe_corrente = SCRITTURA
     esclusi: list[str] = []

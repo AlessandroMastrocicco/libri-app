@@ -1,6 +1,11 @@
 # -*- coding: utf-8 -*-
 """
 lettore.py - Lettore PDF di paragrafi.
+
+Responsabilita' uniche: navigazione capitolo/paragrafo, rendering e
+visualizzazione PDF. La rigenerazione AI del testo'e' delegata a
+`popup_rigenera` (UI del popup) e `core.ai.rigenera` (logica): qui solo
+orchestrazione threading e reload dell'anteprima a successo avvenuto.
 """
 
 from __future__ import annotations
@@ -35,6 +40,8 @@ from app.core.render_paragrafo import (
     percorso_cache_pdf,
     renderizza_paragrafo,
 )
+from app.core.pattern_paragrafo import PATTERN_PARAGRAFO
+from app.core.pattern_esercizi import PATTERN_ESERCIZI
 
 
 class SchermataLettore(ctk.CTkFrame):
@@ -173,7 +180,7 @@ class SchermataLettore(ctk.CTkFrame):
 
         toolbar = card(main)
         toolbar.grid(row=0, column=0, sticky="ew", pady=(0, 8))
-        toolbar.grid_columnconfigure(3, weight=1)
+        toolbar.grid_columnconfigure(4, weight=1)
 
         self.btn_render = bottone_primario(
             toolbar, "  Rigenera anteprima",
@@ -194,13 +201,21 @@ class SchermataLettore(ctk.CTkFrame):
             width=170,
         ).grid(row=0, column=2, padx=4, pady=10)
 
+        # Rigenerazione AI del testo del paragrafo (non del PDF).
+        self.btn_rig_ai = bottone_secondario(
+            toolbar, "  Rigenera paragrafo",
+            command=self._apri_rigenera_ai,
+            width=190,
+        )
+        self.btn_rig_ai.grid(row=0, column=3, padx=4, pady=10)
+
         self.lbl_stato = ctk.CTkLabel(
             toolbar, text="",
             text_color=tema.TESTO_TENUE,
             font=ctk.CTkFont(size=12),
             anchor="w",
         )
-        self.lbl_stato.grid(row=0, column=3, sticky="w", padx=12)
+        self.lbl_stato.grid(row=0, column=4, sticky="w", padx=12)
 
         self.viewer = PdfViewer(main)
         self.viewer.grid(row=1, column=0, sticky="nsew")
@@ -333,6 +348,151 @@ class SchermataLettore(ctk.CTkFrame):
     # ------------------------------------------------------------------
     # Utility
     # ------------------------------------------------------------------
+
+    # ------------------------------------------------------------------
+    # Rigenerazione AI del paragrafo (popup istruzioni -> core.ai.rigenera)
+    # ------------------------------------------------------------------
+
+    def _apri_rigenera_ai(self):
+        """Bottone 'Rigenera paragrafo': apre il popup con la casella delle
+        istruzioni. Il modello ricevera' fonti (slide coinvolte), versione
+        attuale, linee guida e indicazioni dell'utente (vedi core.ai.rigenera).
+        """
+        if self._cap_sel is None or self._par_sel is None:
+            self._set_stato("Seleziona prima un paragrafo.", colore=tema.ERRORE)
+            return
+        contenuto = leggi_paragrafo(
+            self.app.root_progetto, self.slug, self._cap_sel, self._par_sel)
+        if not contenuto or not contenuto.strip():
+            self._set_stato("Il paragrafo non ha codice: niente da rigenerare.",
+                            colore=tema.ERRORE)
+            return
+        from app.core.paragrafo import titolo_da_sorgente
+        titolo_par = titolo_da_sorgente(contenuto,
+                                         fallback=f"{self._cap_sel}.{self._par_sel}")
+        cap, par_id = self._cap_sel, self._par_sel
+
+        from app.screens.popup_rigenera import PopupRigeneraParagrafo
+        PopupRigeneraParagrafo(
+            self, titolo_par=titolo_par,
+            avvia=lambda istr, cb: self._avvia_rigenera_ai(
+                cap, par_id, istr, contenuto, cb),
+            on_fine=lambda esito, note: self._fine_rigenera_ai(
+                cap, par_id, esito, note))
+
+    def _avvia_rigenera_ai(self, cap: int, par_id: str, istruzioni: str,
+                           contenuto: str, cb):
+        """Esegue core.ai.rigenera nel thread gia' avviato dal popup."""
+        from app.core.ai.impostazioni import LeggiChiavi
+        from app.core.ai.providers import costruisci_fornitore
+        from app.core.ai.rigenera import rigenera_paragrafo
+        from app.core.ai.router import Router as _Router
+        from app.core.paragrafo import aggiorna_paragrafo, valida_contenuto
+        from app.core.render_paragrafo import invalida_cache_paragrafo
+
+        radice = self.app.root_progetto
+        letture = LeggiChiavi(radice)
+        if not letture.consenso_cloud():
+            cb(None, ["Servono chiavi API nel file .env e il consenso cloud "
+                      "in libri/_ai_config.json (privacy.consenso_cloud=true), "
+                      "oppure Ollama locale."])
+            return
+        esercizi = par_id.endswith("_esercizi")
+        pattern = PATTERN_ESERCIZI.format(teoria_origine="—") if esercizi \
+            else PATTERN_PARAGRAFO
+        router = _Router(path_stato=radice / "libri" / "_ai_quota.json")
+        fornitore = costruisci_fornitore(radice)
+        esito, note = rigenera_paragrafo(
+            router=router, provider=fornitore.chiama, root=radice,
+            slug=self.slug, cap=cap, par_id=par_id,
+            contenuto=contenuto, istruzioni_utente=istruzioni,
+            pattern_completo=pattern,
+            valida_fn=lambda c: valida_contenuto(
+                c, root=radice, slug=self.slug, cap=cap))
+        cb(esito, note)
+
+    def _fine_rigenera_ai(self, cap: int, par_id: str, esito, note):
+        """Su successo: backup dell'originale (.bak.txt), salvataggio della
+        bozza (.bozza.txt), APPLICAZIONE al paragrafo (aggiorna_paragrafo che
+        ne fa gia' un backup interno), cache PDF invalidata e nuova anteprima.
+        Un pulsante 'Annulla' ripristina l'originale con la stessa procedura."""
+        for n in note or []:
+            print(f"[rigenera-lettore] {n}")
+        if esito is None or not getattr(esito, "ok", False):
+            msg = (note[0] if (note and esito is None)
+                   else getattr(esito, "errore", "esito assente"))
+            self._set_stato(f"Rigenerazione fallita: {msg}", colore=tema.ERRORE)
+            return
+        # se nel frattempo l'utente ha cambiato paragrafo, non applicare qui
+        if (cap, par_id) != (self._cap_sel, self._par_sel):
+            self._set_stato("Paragrafo cambiato: bozza non applicata.",
+                            colore=tema.AVVISO)
+            return
+
+        from app.core.paragrafo import percorso_paragrafo
+        p_file = percorso_paragrafo(self.app.root_progetto, self.slug,
+                                    cap, par_id)
+        originale = leggi_paragrafo(self.app.root_progetto, self.slug,
+                                    cap, par_id) or ""
+        # 1) backup espliciti (atomici tmp+replace, come da io_sicuro)
+        cart = p_file.parent
+        for nome, testo in ((f"{par_id}.bak.txt", originale),
+                            (f"{par_id}.bozza.txt", esito.contenuto or "")):
+            tmp = cart / (nome + ".tmp")
+            tmp.write_text(testo, encoding="utf-8")
+            tmp.replace(cart / nome)
+        # 2) applica la bozza al paragrafo reale
+        risultato = aggiorna_paragrafo(self.app.root_progetto, self.slug,
+                                       cap, par_id, esito.contenuto or "")
+        if not risultato.get("ok"):
+            err = " | ".join(risultato.get("errori") or ["errore sconosciuto"])
+            self._set_stato(f"Bozza salva ma non applicata: {err} "
+                            f"(vedi {par_id}.bozza.txt)", colore=tema.ERRORE)
+            return
+        invalida_cache_paragrafo(self.app.root_progetto, self.slug,
+                                 cap, par_id)
+        # 3) messaggio con annullamento a portata di click
+        self._testo_annulla = ("  Annulla rigenerazione" if originale.strip()
+                               else None)
+        self._backup_prima = cart / f"{par_id}.bak.txt"
+        self._set_stato(
+            f"Paragrafo rigenerato ({esito.modello_finale}, "
+            f"{esito.token_totali:,} token). "
+            + ("Premi 'Annulla rigenerazione' per ripristinare."
+               if self._testo_annulla else ""),
+            colore=tema.SUCCESSO)
+        self.btn_render.configure(text=self._testo_annulla or
+                                  "  Rigenera anteprima",
+                                  command=(self._annulla_rigenera
+                                           if self._testo_annulla else
+                                           self._rigenera))
+        # 4) nuova anteprima del paragrafo rigenerato
+        self._renderizza(asincrono=True, forza=True)
+
+    def _annulla_rigenera(self):
+        """Ripristina il paragrafo dal backup pre-rigenerazione."""
+        bak = getattr(self, "_backup_prima", None)
+        cap, par_id = self._cap_sel, self._par_sel
+        if not bak or not bak.is_file() or cap is None or par_id is None:
+            self.btn_render.configure(text="  Rigenera anteprima",
+                                      command=self._rigenera)
+            return
+        from app.core.paragrafo import percorso_paragrafo
+        testo = bak.read_text(encoding="utf-8")
+        risultato = aggiorna_paragrafo(self.app.root_progetto, self.slug,
+                                       cap, par_id, testo)
+        if risultato.get("ok"):
+            invalida_cache_paragrafo(self.app.root_progetto, self.slug,
+                                     cap, par_id)
+            self._set_stato("Ripristinata la versione precedente.",
+                            colore=tema.AVVISO)
+            self.btn_render.configure(text="  Rigenera anteprima",
+                                      command=self._rigenera)
+            self._renderizza(asincrono=True, forza=True)
+        else:
+            self._set_stato("Ripristino fallito: "
+                            + " | ".join(risultato.get("errori") or []),
+                            colore=tema.ERRORE)
 
     def _set_stato(self, testo: str, colore: str = tema.TESTO_TENUE):
         try:

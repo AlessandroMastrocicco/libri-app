@@ -656,6 +656,13 @@ class DialogCatturaDaDispensa(tk.Toplevel):
         self._slider_busy = False
         self._resize_job = None
 
+        # --- stato ritaglio AI ---
+        self._ai_in_corso = False
+        self._figure_ai: list = []       # FiguraSlide della slide corrente
+        self._idx_figura_ai = -1         # proposta attiva (-1 = nessuna)
+        self._foto_anteprima = None      # PhotoImage del crop proposto
+        self._sel_ant: tuple | None = None   # proposta AI attiva ("ai", box)
+
         self.title(f"Cattura da dispensa — {nome_ref}")
         self.geometry("1060x820")
         self.minsize(820, 640)
@@ -833,6 +840,23 @@ class DialogCatturaDaDispensa(tk.Toplevel):
         )
         self.btn_applica.pack(side="right", padx=(6, 0))
 
+        # -------- Ritaglio AI (alternativa automatica a quello manuale) ----
+        self.btn_ai = tk.Button(
+            footer, text="✨ Trova figure con AI",
+            bg=self.BG_INPUT, fg=self.ACCENTO,
+            activebackground=self.NEUTRO_HOVER,
+            activeforeground=self.ACCENTO,
+            bd=1, highlightthickness=0, relief="flat", padx=12, pady=6,
+            font=("Segoe UI", 10, "bold"),
+            command=self._ritaglio_ai,
+        )
+        self.btn_ai.pack(side="right", padx=(6, 0))
+        self._lbl_ai = tk.Label(
+            footer, text="", bg=self.BG, fg=self.FG_TENUE,
+            font=("Segoe UI", 9), anchor="w",
+        )
+        self._lbl_ai.pack(side="right", padx=(0, 8))
+
     # ------------------------------------------------------------------
     # Caricamento
     # ------------------------------------------------------------------
@@ -927,6 +951,8 @@ class DialogCatturaDaDispensa(tk.Toplevel):
             self._disegna_messaggio("(nessuna pagina in questa dispensa)")
             return
 
+        self._figure_ai = []             # le proposte valgono per la slide corrente
+        self._sel_ant = None
         path = self._pagine[self._idx_pagina]
         try:
             img = Image.open(str(path))
@@ -1124,6 +1150,7 @@ class DialogCatturaDaDispensa(tk.Toplevel):
     def _on_press(self, event):
         if self._img_originale is None:
             return
+        self._sel_ant = None             # il disegno manuale sostituisce l'AI
         self._drag_start = self._limita_immagine(event.x, event.y)
         self._sel = None
         if self._rect_id is not None:
@@ -1203,36 +1230,179 @@ class DialogCatturaDaDispensa(tk.Toplevel):
         )
 
     # ------------------------------------------------------------------
+    # Ritaglio AI (alternativa automatica al disegno manuale)
+    # ------------------------------------------------------------------
+
+    def _libro_dir(self) -> Path:
+        return Path(self.root_progetto) / "libri" / self.slug
+
+    def _ritaglio_ai(self):
+        """Lancia la localizzazione figure sulla slide corrente (thread)."""
+        if self._ai_in_corso or not self._pagine:
+            return
+        if self._img_originale is None:
+            return
+        self._ai_in_corso = True
+        self.btn_ai.configure(state="disabled", text="AI in corso…")
+        self._lbl_ai.configure(text="Analisi della slide…")
+        path_slide = self._pagine[self._idx_pagina]
+        hint = self.nome_ref.replace(".png", "").replace("_", " ")
+        import threading
+        t = threading.Thread(target=self._worker_ritaglio_ai,
+                             args=(path_slide, hint), daemon=True)
+        t.start()
+
+    def _worker_ritaglio_ai(self, path_slide: Path, hint: str):
+        esito = None
+        errore = None
+        try:
+            from app.core.ai.impostazioni import LeggiChiavi
+            from app.core.ai.providers import costruisci_fornitore
+            from app.core.ai.ritaglio import (localizza_figure,
+                                              suggerisci_figura)
+            from app.core.ai.router import Router
+
+            chiavi = LeggiChiavi(Path(self.root_progetto))
+            fornitore = costruisci_fornitore(Path(self.root_progetto))
+            router = Router()
+            if not chiavi.consenso_cloud():
+                raise RuntimeError(
+                    "Consenso cloud non abilitato: usare il ritaglio "
+                    "manuale.")
+            modello_fissato = chiavi.modello_fissato()
+            esito = localizza_figure(
+                router=router, provider=fornitore.chiama,
+                slide_path=path_slide, libro_dir=self._libro_dir(),
+                hint=hint, modello_fissato=modello_fissato)
+            # porta la proposta piu' pertinente in testa alla lista
+            best = suggerisci_figura(esito, hint) if esito and esito.ok else None
+            if best and esito.figure and esito.figure[0] is not best:
+                esito.figure.remove(best)
+                esito.figure.insert(0, best)
+        except Exception as e:
+            errore = str(e)
+        self.after(0, lambda: self._esito_ritaglio_ai(esito, errore))
+
+    def _esito_ritaglio_ai(self, esito, errore):
+        self._ai_in_corso = False
+        self.btn_ai.configure(state="normal", text="✨ Trova figure con AI")
+        if errore:
+            self._lbl_ai.configure(text=f"AI non disponibile: {errore}")
+            return
+        if not esito or not esito.ok or not esito.figure:
+            msg = (esito.errori[0] if esito and esito.errori
+                   else "nessuna figura individuata")
+            self._lbl_ai.configure(text=f"Nessuna proposta ({msg}).")
+            return
+        self._figure_ai = list(esito.figure)
+        # riparti dalla proposta piu' pertinente per l'immagine richiesta
+        try:
+            from app.core.ai.ritaglio import suggerisci_figura
+            best = suggerisci_figura(esito,
+                                     self.nome_ref.replace("_", " "))
+            if best is not None and best in self._figure_ai \
+                    and self._figure_ai[0] is not best:
+                self._figure_ai.remove(best)
+                self._figure_ai.insert(0, best)
+        except Exception:
+            pass
+        fonte = {"cache": "da cache (0 token)", "ai": f"AI {esito.modello_usato}",
+                 "euristica": "euristica locale (0 token)"}.get(
+            esito.fonte, esito.fonte)
+        self._lbl_ai.configure(
+            text=f"{len(self._figure_ai)} proposte · {fonte}"
+                 + (f" · {esito.token_spesi:,} tok" if esito.token_spesi else ""))
+        self._mostra_figura_ai(0)
+
+    def _mostra_figura_ai(self, indice: int):
+        """Evidenzia il box della figura i-esima e prepara l'anteprima."""
+        if not self._figure_ai or self._img_originale is None:
+            return
+        self._idx_figura_ai = indice % len(self._figure_ai)
+        fig = self._figure_ai[self._idx_figura_ai]
+        w0, h0 = self._img_originale.size
+        # box normalizzato -> coordinate visualizzate (scala canvas)
+        x0, y0, x1, y1 = fig.box
+        self._sel = None                     # proposta AI in corso di esame
+        if self._rect_id is not None:
+            try:
+                self.canvas.delete(self._rect_id)
+            except Exception:
+                pass
+        rx0, ry0 = x0 * w0 * self._scala, y0 * h0 * self._scala
+        rx1, ry1 = x1 * w0 * self._scala, y1 * h0 * self._scala
+        cx0 = self._offset_x + rx0
+        cy0 = self._offset_y + ry0
+        cx1 = self._offset_x + rx1
+        cy1 = self._offset_y + ry1
+        self._rect_id = self.canvas.create_rectangle(
+            cx0, cy0, cx1, cy1, outline=self.ACCENTO, width=3, dash=(6, 3))
+        # anteprima del crop reale (perjudizio dell'utente prima di applicare)
+        try:
+            from app.core.ai.ritaglio import applica_ritaglio
+            crop = applica_ritaglio(self._img_originale, fig.box)
+            if crop is not None:
+                tw = 240
+                th = max(1, int(crop.height * (tw / crop.width))) \
+                    if crop.width else tw
+                crop = crop.resize((tw, th), Image.LANCZOS)
+                self._foto_anteprima = ImageTk.PhotoImage(crop, master=self)
+                self.lbl_sel.configure(
+                    text=(f"Figura {self._idx_figura_ai + 1}/"
+                          f"{len(self._figure_ai)} — {fig.tipo}: "
+                          f"{fig.didascalia}\n"
+                          "«Applica ritaglio» salva questo; "
+                          "premi di nuovo «Trova figure con AI» per la "
+                          "successiva."),
+                    fg=self.PRIMARIO)
+                self.btn_applica.configure(state="normal")
+                self._sel_ant = ("ai", fig.box)
+        except Exception as e:
+            print(f"[ritaglio AI] anteprima: {e}")
+
+    # ------------------------------------------------------------------
     # Applica
     # ------------------------------------------------------------------
 
     def _applica(self):
-        if self._sel is None or self._img_originale is None:
+        if self._img_originale is None:
             return
-
-        x0, y0, x1, y1 = self._sel
         img = self._img_originale
         w0, h0 = img.size
 
-        ox0 = int(round(x0 / self._scala))
-        oy0 = int(round(y0 / self._scala))
-        ox1 = int(round(x1 / self._scala))
-        oy1 = int(round(y1 / self._scala))
-
-        ox0 = max(0, min(ox0, w0 - 1))
-        oy0 = max(0, min(oy0, h0 - 1))
-        ox1 = max(ox0 + 1, min(ox1, w0))
-        oy1 = max(oy0 + 1, min(oy1, h0))
-
-        try:
-            ritaglio = img.crop((ox0, oy0, ox1, oy1))
-        except Exception as e:
-            messagebox.showerror(
-                "Errore ritaglio",
-                f"Impossibile ritagliare: {e}",
-                parent=self,
-            )
-            return
+        if self._sel_ant and self._sel_ant[0] == "ai" \
+                and self._sel is None:
+            # ritaglio proposto dall'AI: box normalizzato -> pixel lossless
+            from app.core.ai.ritaglio import applica_ritaglio
+            ritaglio = applica_ritaglio(img, self._sel_ant[1])
+            if ritaglio is None:
+                messagebox.showerror("Errore ritaglio",
+                                     "Box AI non applicabile.", parent=self)
+                return
+            # proposta consumata: alla prossima pressione si passa alla successiva
+            self._sel_ant = None
+            prop_attiva = self._idx_figura_ai
+            self._idx_figura_ai = -1
+            self.after(0, lambda i=prop_attiva: (
+                self._mostra_figura_ai(i + 1)
+                if self._figure_ai else None))
+        else:
+            if self._sel is None:
+                return
+            x0, y0, x1, y1 = self._sel
+            ox0 = max(0, min(int(round(x0 / self._scala)), w0 - 1))
+            oy0 = max(0, min(int(round(y0 / self._scala)), h0 - 1))
+            ox1 = max(ox0 + 1, min(int(round(x1 / self._scala)), w0))
+            oy1 = max(oy0 + 1, min(int(round(y1 / self._scala)), h0))
+            try:
+                ritaglio = img.crop((ox0, oy0, ox1, oy1))
+            except Exception as e:
+                messagebox.showerror(
+                    "Errore ritaglio",
+                    f"Impossibile ritagliare: {e}",
+                    parent=self,
+                )
+                return
 
         cb = self.on_conferma
         dispensa = self.dispense[self._idx_dispensa]

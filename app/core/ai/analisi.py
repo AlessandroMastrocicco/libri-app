@@ -42,17 +42,31 @@ from app.core.slide_extract import cartella_estrazione
 
 # ----------------------------------------------------------------------
 # Prompt di analisi (statico => cache-friendly per i provider compatibili)
+# Allineato alla Guida per l'AI-autore, sez. 4.1 "prima passata a blocchi":
+# la scheda e' un indice snello, NON una trascrizione ne' una spiegazione.
 # ----------------------------------------------------------------------
 
 ISTRUZIONE_ANALISI = (
-    "Sei un indicizzatore di dispense universitarie. Per OGNI immagine "
-    "ricevuta (una slide) produci una scheda JSON. Rispondi SOLO con un "
-    "array JSON valido, senza markdown ne' commenti. Formato:\n"
-    '[{"slide": <numero>, "titolo": "...", "punti": ["...", '
-    '"..."], "figure": ["descrizione breve diagramma"]}, ...]\n'
-    "Regole: un array elemento per immagine, nello stesso ordine; massimo "
-    "6 punti per slide, ciascuno <= 20 parole; non inventare contenuti; "
-    "`slide` = numero indicato nel testo che accompagna le immagini."
+    "Sei l'indicizzatore della FASE 0 della guida autore: costruisci le "
+    "schede-snelle delle slide di un corso universitario. Per OGNI immagine "
+    "ricevuta produci una scheda JSON con SOLO: identificativo, tema in una "
+    "riga, concetti (marcati introdotto/ripreso), indizi di centralita', "
+    "figure visive presenti, dubbi di leggibilita'. Non trascrivere i "
+    "contenuti e non spiegare nulla: e' un inventario, non una parafrasi. "
+    "Rispondi SOLO con un array JSON valido, senza markdown ne' commenti. "
+    "Formato:\n"
+    '[{"slide": <numero>, "titolo": "<tema in una riga>", '
+    '"punti": ["<concetto> [introdotto|ripreso]", ...], '
+    '"centralita": "A|B|C", '
+    '"figure": ["tipo + posizione nella slide: diagramma in alto a destra..."'
+    ", ...], \"dubbi\": [\"formula illeggibile in basso\", ...]}, ...]\n"
+    "Regole: un elemento per immagine, nello stesso ordine; massimo 6 punti "
+    "per slide, ciascuno <= 20 parole; centralita' A=portante (definizioni "
+    "formali, peso grafico, riepiloghi), B=supporto, C=contorno; in "
+    "`figure` elenca OGNI elemento visivo utile (diagrammi, schemi, grafici, "
+    "foto) separatamente con la posizione precisa nella slide - mai testi, "
+    "intestazioni o decorazioni; `dubbi` per slide ambigue/illeggibili "
+    "(segnalare, non indovinare); non inventare contenuti."
 )
 
 
