@@ -1,5 +1,5 @@
 {
-  "version": "0.4.1",
+  "version": "0.4.2",
   "url": "https://github.com/AlessandroMastrocicco/libri-app/releases",
-  "changelog": "• Risolto il rendering dei paragrafi generati nell'app installata includendo il motore completo nel bundle e distribuendo tutti i file necessari con l'installer."
+  "changelog": "• Ampliato il supporto ai simboli matematici e logici con il font Unicode Noto Sans Math incluso nell'app.\n• Aggiunto fallback automatico per operatori, frecce, relazioni, simboli greci e alfabeti matematici Unicode.\n• Migliorata la resa dei confronti < e delle entità nei testi dei paragrafi."
 }

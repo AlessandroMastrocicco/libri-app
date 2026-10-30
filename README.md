@@ -15,7 +15,7 @@ python main.py
 
 ## Installazione Windows
 
-Scarica `LIBRI-Setup-0.4.1.exe` dalla [release più recente](https://github.com/AlessandroMastrocicco/libri-app/releases/latest)
+Scarica `LIBRI-Setup-0.4.2.exe` dalla [release più recente](https://github.com/AlessandroMastrocicco/libri-app/releases/latest)
 ed eseguilo. L'installer aggiunge LIBRI al menu Start e, se selezionato,
 al desktop; i collegamenti mostrano il nome e l'icona dell'app, senza
 l'estensione `.exe`.
@@ -38,6 +38,11 @@ registrata con l'immagine del capitolo.
 Al primo avvio da sorgente l'app crea la cartella `libri` nella directory
 del progetto. I contenuti aggiunti dall'utente restano locali e non sono
 inclusi in questo repository.
+
+Il motore PDF include Noto Sans Math per rappresentare un'ampia gamma di
+simboli matematici e logici Unicode, compresi operatori, frecce, relazioni e
+alfabeti matematici. Il font è distribuito secondo la licenza SIL Open Font
+License 1.1, inclusa in `assets/fonts/OFL-NotoSansMath.txt`.
 
 ## Struttura
 

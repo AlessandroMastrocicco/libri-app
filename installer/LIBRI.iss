@@ -1,5 +1,5 @@
 #define AppName "LIBRI"
-#define AppVersion "0.4.1"
+#define AppVersion "0.4.2"
 #define AppPublisher "Alessandro Mastrocicco"
 #define AppExeName "LIBRI.exe"
 #ifndef BundleDir

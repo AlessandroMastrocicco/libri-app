@@ -11,6 +11,7 @@ a = Analysis(
         # Includi la cartella 'app' e 'motore' (necessarie per gli import)
         ('app', 'app'),
         ('motore', 'motore'),
+        ('assets/fonts', 'assets/fonts'),
         # Includi i file di CustomTkinter dal Python usato per la build.
         *collect_data_files('customtkinter'),
         # Se hai un'icona, decommenta e modifica la riga sotto

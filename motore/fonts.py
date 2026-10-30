@@ -18,6 +18,7 @@ NOTA: i caratteri speciali sono scritti come escape \\uXXXX in modo che
 il file sia interamente in ASCII e non si corrompa mai per problemi di
 encoding quando viene copiato, incollato o salvato con editor diversi.
 """
+import re
 import sys
 from pathlib import Path
 
@@ -34,6 +35,12 @@ if sys.platform == "win32":
 else:
     FONTS_DIR = None
 
+MATH_FONT_PATH = (
+    Path(__file__).resolve().parents[1]
+    / "assets"
+    / "fonts"
+    / "NotoSansMath-Regular.ttf"
+)
 
 _FONTS = [
     ("LibroRegular",    ["arial.ttf"]),
@@ -42,9 +49,6 @@ _FONTS = [
     ("LibroBoldItalic", ["arialbi.ttf"]),
     ("LibroMono",       ["cour.ttf"]),
     ("LibroMonoBold",   ["courbd.ttf"]),
-    # Font con copertura estesa di simboli matematici e tipografici.
-    # Segoe UI Symbol e' presente su Windows 7+.
-    ("LibroSimboli",    ["seguisym.ttf", "segoeui.ttf"]),
 ]
 
 _FALLBACK = {
@@ -60,6 +64,7 @@ _FALLBACK = {
 _registrati_ok = False
 _simboli_disponibili = False
 _eseguito = False
+_font_registrati = set()
 
 
 def registra_font() -> bool:
@@ -68,26 +73,44 @@ def registra_font() -> bool:
     Ritorna True se i font Unicode principali sono stati registrati.
     """
     global _registrati_ok, _simboli_disponibili, _eseguito
+    global _font_registrati
     if _eseguito:
         return _registrati_ok
     _eseguito = True
 
-    if FONTS_DIR is None or not FONTS_DIR.exists():
-        print("[INFO] Font Unicode non disponibili: uso fallback Helvetica.")
-        return False
-
     registrati = set()
-    for nome, candidati in _FONTS:
-        for filename in candidati:
+    if FONTS_DIR is not None and FONTS_DIR.exists():
+        for nome, candidati in _FONTS:
+            for filename in candidati:
+                path = FONTS_DIR / filename
+                if not path.exists():
+                    continue
+                try:
+                    pdfmetrics.registerFont(TTFont(nome, str(path)))
+                    registrati.add(nome)
+                    break
+                except Exception as e:
+                    print(f"[WARN] Impossibile registrare {nome} da {filename}: {e}")
+
+    if MATH_FONT_PATH.is_file():
+        try:
+            pdfmetrics.registerFont(
+                TTFont("LibroSimboli", str(MATH_FONT_PATH))
+            )
+            registrati.add("LibroSimboli")
+        except Exception as e:
+            print(f"[WARN] Impossibile registrare il font matematico: {e}")
+    elif FONTS_DIR is not None and FONTS_DIR.exists():
+        for filename in ("seguisym.ttf", "segoeui.ttf"):
             path = FONTS_DIR / filename
-            if not path.exists():
+            if not path.is_file():
                 continue
             try:
-                pdfmetrics.registerFont(TTFont(nome, str(path)))
-                registrati.add(nome)
+                pdfmetrics.registerFont(TTFont("LibroSimboli", str(path)))
+                registrati.add("LibroSimboli")
                 break
             except Exception as e:
-                print(f"[WARN] Impossibile registrare {nome} da {filename}: {e}")
+                print(f"[WARN] Impossibile registrare LibroSimboli da {filename}: {e}")
 
     # Famiglie (per far funzionare <b> e <i> nei Paragraph)
     if {"LibroRegular", "LibroBold", "LibroItalic", "LibroBoldItalic"} <= registrati:
@@ -104,6 +127,7 @@ def registra_font() -> bool:
         )
 
     _simboli_disponibili = "LibroSimboli" in registrati
+    _font_registrati = registrati
     _registrati_ok = {"LibroRegular", "LibroBold", "LibroItalic",
                       "LibroBoldItalic", "LibroMono", "LibroMonoBold"} <= registrati
 
@@ -112,9 +136,9 @@ def registra_font() -> bool:
     else:
         print(f"[WARN] Solo {len(registrati)}/{len(_FONTS)} font registrati.")
     if _simboli_disponibili:
-        print("[ok] Font simbolo (Segoe UI Symbol) registrato.")
+        print("[ok] Font matematico Unicode registrato.")
     else:
-        print("[WARN] Font simbolo non trovato: simboli matematici appariranno come quadrati.")
+        print("[WARN] Font matematico non trovato: simboli estesi potrebbero mancare.")
 
     return _registrati_ok
 
@@ -124,7 +148,7 @@ def nome_font(logico: str) -> str:
     Restituisce il nome del font logico se registrato, altrimenti il fallback.
     Da usare in tutti i fontName degli stili e nelle chiamate canvas.setFont().
     """
-    if _registrati_ok:
+    if logico in _font_registrati:
         return logico
     return _FALLBACK.get(logico, "Helvetica")
 
@@ -162,59 +186,31 @@ _SUB_MAP = {
 
 
 # ---------------------------------------------------------------------------
-# Simboli che NON sono decomponibili e richiedono LibroSimboli
+# Blocchi Unicode con simboli matematici, logici e formali.
 # ---------------------------------------------------------------------------
-_SIMBOLI_PROBLEMATICI = set(
-    # --- Letterlike Symbols (insiemi numerici) ---
-    "\u2124\u211D\u2115\u211A\u2102\u2119\u210D"
+_MATH_RANGES = (
+    (0x0370, 0x03FF),  # Greek and Coptic
+    (0x1F00, 0x1FFF),  # Greek Extended
+    (0x2000, 0x206F),  # General Punctuation and mathematical primes
+    (0x2070, 0x209F),  # Superscripts and Subscripts
+    (0x20D0, 0x20FF),  # Combining Diacritical Marks for Symbols
+    (0x2100, 0x214F),  # Letterlike Symbols
+    (0x2190, 0x21FF),  # Arrows
+    (0x2200, 0x22FF),  # Mathematical Operators
+    (0x27C0, 0x27EF),  # Miscellaneous Mathematical Symbols-A
+    (0x27F0, 0x27FF),  # Supplemental Arrows-A
+    (0x2900, 0x297F),  # Supplemental Arrows-B
+    (0x2980, 0x29FF),  # Miscellaneous Mathematical Symbols-B
+    (0x2A00, 0x2AFF),  # Supplemental Mathematical Operators
+    (0x2B00, 0x2BFF),  # Miscellaneous Symbols and Arrows
+    (0x1D400, 0x1D7FF),  # Mathematical Alphanumeric Symbols
+)
 
-    # --- Insiemistica e appartenenza ---
-    "\u2286\u2287\u2282\u2283\u2284\u2285\u2229\u222A\u2216"
-    "\u2208\u2209\u220B\u220C\u2205"
-
-    # --- Logica ---
-    "\u2200\u2203\u2204\u00AC\u2227\u2228"
-
-    # --- Frecce ---
-    "\u2192\u2190\u2194\u21D2\u21D0\u21D4\u21A6\u2191\u2193"
-
-    # --- Disuguaglianze e uguaglianze ---
-    "\u2260\u2248\u2261\u2262\u2264\u2265\u226A\u226B"
-
-    # --- Operatori matematici ---
-    "\u2211\u220F\u222B\u222E\u221A\u221E\u221D\u2295\u2297\u22A5\u22A4\u22A2\u22A8"
-    "\u2212"   # MINUS SIGN (segno meno tipografico)
-
-    # --- Greco minuscolo ---
-    "\u03B1\u03B2\u03B3\u03B4\u03B5\u03B6\u03B7\u03B8\u03B9\u03BA\u03BB\u03BC"
-    "\u03BD\u03BE\u03C0\u03C1\u03C3\u03C4\u03C5\u03C6\u03C7\u03C8\u03C9"
-
-    # --- Greco maiuscolo ---
-    "\u0393\u0394\u0398\u039B\u039E\u03A0\u03A3\u03A6\u03A8\u03A9"
-
-    # --- Operatori di join e outer join (bowtie e derivati) ---
-    "\u22C8\u22C9\u22CA\u27D5\u27D6\u27D7"
-
-    # --- Dingbats: check, cross, ballot box ---
-    "\u2713\u2714\u2717\u2718\u2611\u2612\u2610"
-
-    # --- Stelle e decorazioni ---
-    "\u2605\u2606\u2726\u2727\u2756\u2731\u2732\u2733\u2734\u2735"
-
-    # --- Avvisi e simboli ---
-    "\u26A0\u26A1\u2600\u2601\u2744"
-
-    # --- Bullet e marker di elenco ---
-    "\u2022\u2023\u25E6\u2043\u2219"
-
-    # --- Paragrafi, note, dagger ---
-    "\u00A7\u00B6\u2020\u2021"
-
-    # --- Punteggiatura tipografica ---
-    "\u2014\u2013\u2026\u201C\u201D\u2018\u2019"
-
-    # --- Simboli vari utili ---
-    "\u20AC\u00A3\u00A5\u00A9\u00AE\u2122\u00B0\u00B1\u00D7\u00F7"
+_REPORTLAB_MARKUP_RE = re.compile(
+    r'</?(?:b|i|u|strike|super|sub|font|span|link|a|br|para|bullet|'
+    r'greek|unichar|onDraw|index|setLink|seq|seqdefault|seqreset)'
+    r'(?:\s+[^<>]*?)?\s*/?>|&(?:#[0-9]+|#x[0-9A-Fa-f]+|'
+    r'[A-Za-z][A-Za-z0-9]+);'
 )
 
 
@@ -227,12 +223,52 @@ def fix_simboli(testo: str) -> str:
     Idempotente e sicuro su stringhe che contengono gia' tag HTML di ReportLab.
     """
     risultato = []
-    for ch in testo:
+    simboli = (
+        pdfmetrics.getFont("LibroSimboli").face.charWidths
+        if _simboli_disponibili
+        else {}
+    )
+    indice = 0
+    font_simboli_attivi = []
+    while indice < len(testo):
+        ch = testo[indice]
+        if ch == "<" or ch == "&":
+            markup = _REPORTLAB_MARKUP_RE.match(testo, indice)
+            if markup:
+                token = markup.group(0)
+                risultato.append(token)
+                if token.lower().startswith("<font"):
+                    font_simboli_attivi.append(
+                        bool(re.search(
+                            r'\bname\s*=\s*["\']LibroSimboli["\']',
+                            token,
+                            re.IGNORECASE,
+                        ))
+                    )
+                elif token.lower() == "</font>" and font_simboli_attivi:
+                    font_simboli_attivi.pop()
+                indice = markup.end()
+                continue
+            if ch == "<":
+                risultato.append("&lt;")
+                indice += 1
+                continue
+            if ch == "&":
+                risultato.append("&amp;")
+                indice += 1
+                continue
+
         if ch in _SUB_MAP:
             c, tag = _SUB_MAP[ch]
             risultato.append(f"<{tag}>{c}</{tag}>")
-        elif ch in _SIMBOLI_PROBLEMATICI and _simboli_disponibili:
+        elif (
+            _simboli_disponibili
+            and not any(font_simboli_attivi)
+            and ord(ch) in simboli
+            and any(start <= ord(ch) <= end for start, end in _MATH_RANGES)
+        ):
             risultato.append(f'<font name="LibroSimboli">{ch}</font>')
         else:
             risultato.append(ch)
+        indice += 1
     return "".join(risultato)
