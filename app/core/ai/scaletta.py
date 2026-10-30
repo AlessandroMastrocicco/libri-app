@@ -187,12 +187,16 @@ def scaletta_locale(schede: list[dict], *, dispensa: str = "",
 # ======================================================================
 
 ISTRUZIONE_SCALETTA = (
-    "Sei un curatore editoriale di dispense universitarie. Ricevi la "
-    "scaletta BOZZA di un capitolo (blocchi di slide con titoli grezzi). "
-    "Riscrivi SOLO i titoli in forma editoriale (max 8 parole, lingua "
-    "italiana, fedeli ai concetti elencati, senza inventare). Non cambiare "
-    "numero, ordine o contenuti dei blocchi. Rispondi SOLO con un array "
-    'JSON: [{"titolo": "..."}, ...]'
+    "Sei il curatore della MAPPA DEL CAPITOLO (guida autore, sez. 4.2). "
+    "Ricevi la scaletta BOZZA di un capitolo (blocchi di slide con titoli "
+    "grezzi e concetti). Per ogni blocco: 1) riscrivi il titolo in forma "
+    "editoriale (max 8 parole, italiano, fedele ai concetti, senza "
+    "inventare); 2) aggiungi l'obiettivo di apprendimento in una riga "
+    '("lo studente sara\' in grado di ..."); 3) assegna la classe di '
+    "centralita' prevalente (A/B/C). Non cambiare numero, ordine o "
+    "contenuti dei blocchi; la suddivisione resta quella proposta "
+    "(l'utente potra' modificarla in approvazione). Rispondi SOLO con un "
+    'array JSON: [{"titolo": "...", "obiettivo": "...", "classe": "A"}, ...]'
 )
 
 

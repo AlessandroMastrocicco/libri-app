@@ -22,7 +22,9 @@ from typing import Callable
 from app.core.ai.catalogo import (Modello, SCRITTURA, RAGIONAMENTO, LOCAL,
                                   ESCALATION)
 from app.core.ai.prompt import (pattern_compresso, costruisci_messaggi,
-                                innesta_boilerplate, ISTRUZIONE_SOLO_CORPO)
+                                innesta_boilerplate, ISTRUZIONE_SOLO_CORPO,
+                                statico_per_scrittura)
+from app.core.ai.guida_autore import vincoli_operativi
 from app.core.ai.router import (Router, OK, QUOTA_ESAURITA, ERRORE_RETE,
                                 QuotaEsauritaException)
 from app.core.ai.tokeni import stima_token
@@ -84,10 +86,11 @@ def genera_paragrafo_assistito(
     """Pipeline completa per UN paragrafo. Restituisce EsitoTask; il chiamante
     UI decide commit/bozza. Nessun file toccato qui."""
     esito = EsitoTask(ok=False)
-    statico = pattern_completo  # primo draft: regole intere, cache-friendly
+    # primo draft: guida autore + manuale tecnico (regole intere, cache-friendly)
+    statico = statico_per_scrittura(pattern_completo)
     messaggi, _cache_key = costruisci_messaggi(
         statico, contesto_blocchi,
-        f"Scrivi il paragrafo '{titolo_paragrafo}'.\n{ISTRUZIONE_SOLO_CORPO}")
+        vincoli_operativi(titolo_paragrafo) + "\n" + ISTRUZIONE_SOLO_CORPO)
 
     classe_corrente = SCRITTURA
     esclusi: list[str] = []

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import hashlib
 
+from app.core.ai.guida_autore import blocchi_guida, vincoli_operativi
 from app.core.ai.tokeni import stima_token
 
 
@@ -38,10 +39,12 @@ CONTRATTO STRUTTURALE (versione compatta delle regole LIBRI):
 - Figure: helper figura("L1_S003_nome.png") definito una sola volta prima
   di story(); ogni figura(...) e' un flowable separato nella lista di
   story(), mai annidato in P(). Nome = lezione Lx + slide Sxxx (3 cifre).
-- Tono "noi didattico", prosa continua 1500-3000 parole, niente elenchi
-  come corpo del testo; riquadri didattici dove chiariscono.
-- Chiudi con sezione 'Fonti e integrazioni' che mappa nozioni extra a
-  slide/pagine; non inventare riferimenti.
+- Tono "noi didattico", prosa continua; niente elenchi come corpo del
+  testo; riquadri didattici dove chiariscono (max ~2 per sottoparagrafo).
+- In coda a OGNI sottoparagrafo il blocco Fonti/Tratto da/Elaborazione
+  dell'autore (guida autore); niente riferimenti alle slide nel corpo.
+- Non accorciare il contenuto per limiti di risposta: chiudi il blocco al
+  punto naturale e dichiara la continuazione.
 """
 
 _CONTRATTO_ESERCIZI = """\
@@ -110,6 +113,34 @@ def costruisci_messaggi(blocco_statico: str, blocchi_dynamici: list[str],
             messaggi.append({"role": "user", "content": contesto})
     messaggi.append({"role": "user", "content": istruzione_task})
     return messaggi, f"libri-{hash_blocco(blocco_statico)}"
+
+
+# ======================================================================
+# Assemblaggio allineato alla Guida per l'AI-autore
+# ======================================================================
+
+def statico_per_scrittura(pattern_manuale: str, kind: str = "paragrafo") -> str:
+    """Blocco system per i task di scrittura: contratto editoriale della
+    Guida autore (cosa scrivere e perche') + manuale tecnico del formato
+    (come produrre il file). L'ordine e' fisso => prefix cache stabile.
+
+    In caso di conflitto: sul contenuto/pedagogia comanda la guida, sul
+    formato del codice comanda il manuale (sezione 'Come usare' del PDF).
+    """
+    return ("\n\n".join(blocchi_guida(kind)).strip()
+            + "\n\n=== MANUALE TECNICO DEL FORMATO (premiere su conflitti "
+              "di formattazione) ===\n\n"
+            + pattern_manuale.strip())
+
+
+def messaggi_per_paragrafo(*, pattern_manuale: str, contesto_blocchi: list[str],
+                           titolo_paragrafo: str, kind: str = "paragrafo",
+                           immagini: list[str] | None = None):
+    """Scatola i messaggi per un paragrafo allineati alla guida:
+    system = guida+manuale; user = contesto; istruzione = mini-piano."""
+    statico = statico_per_scrittura(pattern_manuale, kind)
+    istruzione = vincoli_operativi(titolo_paragrafo)
+    return costruisci_messaggi(statico, contesto_blocchi, istruzione, immagini)
 
 
 # ======================================================================
