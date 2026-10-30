@@ -153,16 +153,30 @@ class Router:
 
     def scegli(self, classe: str, token_stimati: int = 0,
               richiede_vision: bool = False,
-              esclusi: tuple[str, ...] = ()) -> Modello:
+              esclusi: tuple[str, ...] = (),
+              contesto_minimo: int = 0) -> Modello:
         """Restituisce il miglior modello disponibile per la classe.
 
         Ordine: priorita' statica crescente, poi minore usanza relativa.
+        `contesto_minimo`: finestra di contesto richiesta dal task (prompt +
+        output): i modelli con finestra piu' piccola vengono scartati prima
+        di consumare quota (scelta strategica del modello).
         raises QuotaEsauritaException se nessuno e' utilizzabile.
         """
         candidati = [m for m in modelli_per_classe(classe)
                      if m.id not in esclusi
                      and (not richiede_vision or m.vision)
+                     and (contesto_minimo <= 0
+                          or m.contesto >= token_stimati + contesto_minimo)
                      and self.disponibile(m, token_stimati)]
+        if not candidati and contesto_minimo > 0:
+            # secondo passaggio: ignora il vincolo di contesto SOLO se non
+            # ci sono alternative (meglio un troncamento controllato che
+            # fermare l'intera pipeline)
+            candidati = [m for m in modelli_per_classe(classe)
+                         if m.id not in esclusi
+                         and (not richiede_vision or m.vision)
+                         and self.disponibile(m, token_stimati)]
         if not candidati:
             raise QuotaEsauritaException(classe, self._prossimo_rollover())
         candidati.sort(key=lambda m: (m.priorita, self.frazione_usata(m)))
@@ -187,6 +201,36 @@ class Router:
         elif esito in (ERRORE_RETE, ERRORE_GENERICO):
             s.cooldown_fino = (self._ora() + timedelta(minutes=15)
                                ).isoformat()
+        self.salva()
+
+    def sincronizza_da_header(self, m: Modello, richieste_residue: int | None,
+                              token_residuali: int | None = None) -> None:
+        """Riallinea il contatore locale alla realta' del provider.
+
+        Gli header x-ratelimit-remaining-* dicono quante richieste restano
+        NELLA FINESTRA CORRENTE: se il provider e' piu' generoso della nostra
+        stima conservativa non sprechiamo quota; se e' piu' restrittivo
+        anticipiamo il 'bruciato' senza consumare una chiamata fallita.
+        """
+        s = self._stato(m.id)
+        oggi = _oggi_per(self._ora)
+        if richieste_residue is not None and m.quota_giorno_richieste:
+            residue_realtime = max(int(richieste_residue), 0)
+            if residue_realtime == 0:
+                s.bruciato_giorno = oggi
+            else:
+                # consumato reale >= consumato stimato: prendiamo il max
+                consumato = m.quota_giorno_richieste - residue_realtime
+                if consumato > s.richieste:
+                    s.richieste = min(consumato, m.quota_giorno_richieste)
+        if token_residuali is not None and m.quota_giorno_token:
+            residue_tok = max(int(token_residuali), 0)
+            if residue_tok == 0:
+                s.bruciato_giorno = oggi
+            else:
+                consumato = m.quota_giorno_token - residue_tok
+                if consumato > s.token:
+                    s.token = min(consumato, m.quota_giorno_token)
         self.salva()
 
     def riepilogo(self) -> list[dict]:
