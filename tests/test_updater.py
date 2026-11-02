@@ -8,10 +8,16 @@ from urllib.error import URLError
 from app.core import updater
 
 
+def _versione_successiva():
+    parti = list(map(int, updater.__version__.split(".")))
+    parti[-1] += 1
+    return ".".join(map(str, parti))
+
+
 class TestControllaAggiornamenti(unittest.TestCase):
     def test_rileva_versione_github_piu_recente(self):
         dati = {
-            "version": "0.4.3",
+            "version": _versione_successiva(),
             "url": "https://example.com/releases",
             "changelog": "Nuova funzione",
         }
@@ -34,13 +40,16 @@ class TestControllaAggiornamenti(unittest.TestCase):
             self.assertIsNone(updater.controlla_aggiornamenti(Path("inesistente")))
 
     def test_usa_metadata_locale_se_github_non_raggiungibile(self):
-        dati = {"version": "0.4.3", "url": "https://example.com/releases"}
+        dati = {
+            "version": _versione_successiva(),
+            "url": "https://example.com/releases",
+        }
         with tempfile.TemporaryDirectory() as directory:
             percorso = Path(directory) / "latest_version.json"
             percorso.write_text(json.dumps(dati), encoding="utf-8")
             with patch.object(updater, "urlopen", side_effect=URLError("offline")):
                 risultato = updater.controlla_aggiornamenti(Path(directory))
-        self.assertEqual(risultato["version"], "0.4.3")
+        self.assertEqual(risultato["version"], _versione_successiva())
 
     def test_ignora_versioni_non_valide(self):
         dati = {"version": "v0.4.1"}

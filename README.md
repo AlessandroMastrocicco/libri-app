@@ -3,12 +3,15 @@
 Applicazione desktop (Python + CustomTkinter) per creare, organizzare e
 consultare libri universitari a partire dalle slide dei docenti.
 
-## Installazione
+## Installazione Windows
 
-La distribuzione avviene **solo tramite ZIP del codice sorgente**: niente
-eseguibili `.exe` o installer. Per i passaggi completi per Windows, macOS e
-Linux consulta [`docs/GUIDA_INSTALLAZIONE.pdf`](docs/GUIDA_INSTALLAZIONE.pdf),
-allegato a ogni release su GitHub. In sintesi:
+Scarica `LIBRI-Setup-0.5.1.exe` dalla
+[release più recente](https://github.com/AlessandroMastrocicco/libri-app/releases/latest)
+ed eseguilo. L'installer aggiunge LIBRI al menu Start e, se selezionato,
+al desktop. In alternativa, scarica il pacchetto ZIP portatile dalla release
+ed esegui `LIBRI.exe`.
+
+Per Windows, macOS e Linux è disponibile anche l'installazione da sorgente:
 
 1. scarica **Source code (zip)** dalla [release più recente](https://github.com/AlessandroMastrocicco/libri-app/releases/latest) ed estrailo;
 2. crea un ambiente virtuale Python (>= 3.11) nella cartella estratta;
